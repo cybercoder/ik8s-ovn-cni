@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -20,12 +23,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 	log.SetOutput(f)
 
 	k8sArgs := cniTypes.CniKubeArgs{}
-	if err := types.LoadArgs(args.Args, k8sArgs); err != nil {
+	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
 		log.Printf("error loading args: %v", err)
 		return err
 	}
 	// 1. find kubevirt vm name using kube api
-	log.Println(k8sArgs)
+	k8sClient, err := k8s.CreateClient()
+	if err != nil {
+		log.Printf("Error creating Kubernetes Client: %v", err)
+		return err
+	}
+	pod, err := k8sClient.CoreV1().Pods(string(k8sArgs.K8S_POD_NAMESPACE)).Get(context.Background(), string(k8sArgs.K8S_POD_NAME), metav1.GetOptions{})
+	if err != nil {
+		log.Printf("Error getting pod: %v", err)
+		return err
+	}
+	labels := pod.GetLabels()
+	log.Printf("the vm name is %s", labels["kubevirt.io/name"])
 	return nil
 }
 
