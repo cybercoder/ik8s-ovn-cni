@@ -1,6 +1,14 @@
-package config
+package types
 
 import "github.com/containernetworking/cni/pkg/types"
+
+type CniKubeArgs struct {
+	types.CommonArgs
+	K8S_POD_NAME               types.UnmarshallableString
+	K8S_POD_NAMESPACE          types.UnmarshallableString
+	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
+	K8S_POD_UID                types.UnmarshallableString
+}
 
 // NetConf models the JSON CNI config that Multus will pass in stdin.
 type NetConf struct {
