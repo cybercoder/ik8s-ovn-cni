@@ -10,6 +10,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,7 +40,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	labels := pod.GetLabels()
-	log.Printf("the vm name is %s", labels["kubevirt.io/name"])
+	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
+	vmName := labels["vm.kubevirt.io/name"]
+
+	// 2. Create veth pair
+	err = net_utils.CreateVethPair("veth-"+vmName[:8], args.IfName, args.Netns)
+	if err != nil {
+		log.Printf("Error creating veth pair: %v", err)
+		return err
+	}
+
 	return nil
 }
 
