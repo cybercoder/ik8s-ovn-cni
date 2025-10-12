@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -11,10 +12,12 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func cmdAdd(args *skel.CmdArgs) error {
+
 	f, err := os.OpenFile("/var/log/ik8s-ovn-cni", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
@@ -22,7 +25,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer f.Close()
 
 	log.SetOutput(f)
-
+	oclient, err := ovs.CreateOVSclient()
+	if err != nil {
+		return err
+	}
 	k8sArgs := cniTypes.CniKubeArgs{}
 	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
 		log.Printf("error loading args: %v", err)
@@ -42,17 +48,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
-
-	// 2. Create veth pair
-	if len(vmName) > 8 {
-		vmName = vmName[:8]
+	hostIf := fmt.Sprintf("veth-%s", vmName)
+	if len(hostIf) > 15 {
+		hostIf = hostIf[:15]
 	}
-	err = net_utils.CreateStableVeth("veth-"+vmName, args.IfName, args.Netns)
+	// 2. Create veth pair
+
+	err = net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
-		return err
+		// return err
 	}
 
+	err = oclient.AddPort("br-int", hostIf)
+	if err != nil {
+		log.Printf("Error adding port to ovs: %v", err)
+		return err
+	}
 	return nil
 }
 

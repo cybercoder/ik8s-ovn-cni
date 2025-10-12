@@ -12,14 +12,15 @@ type Client struct {
 	ovsClient client.Client
 }
 
-func CreateOVSclient() *Client {
+func CreateOVSclient() (*Client, error) {
 	dbModel, err := model.NewClientDBModel("Open_vSwitch", map[string]model.Model{
 		OvsBridgeTable:    &Bridge{},
 		OvsPortTable:      &Port{},
 		OvsInterfaceTable: &Interface{},
 	})
 	if err != nil {
-		log.Fatalf("failed to create DB model: %v", err)
+		log.Printf("failed to create DB model: %v", err)
+		return nil, err
 	}
 
 	ovsClient, err := client.NewOVSDBClient(
@@ -27,15 +28,17 @@ func CreateOVSclient() *Client {
 		client.WithEndpoint("unix:/var/run/openvswitch/db.sock"),
 	)
 	if err != nil {
-		log.Fatalf("failed to create OVS client: %v", err)
+		log.Printf("failed to create OVS client: %v", err)
+		return nil, err
 	}
 
 	ctx := context.Background()
 	if err := ovsClient.Connect(ctx); err != nil {
-		log.Fatalf("failed to connect to OVSDB: %v", err)
+		log.Printf("failed to connect to OVSDB: %v", err)
+		return nil, err
 	}
 
-	return &Client{ovsClient: ovsClient}
+	return &Client{ovsClient: ovsClient}, nil
 }
 
 func (c *Client) Close() {
