@@ -1,91 +1,55 @@
 package net_utils
 
 import (
+	"fmt"
 	"log"
-	"net"
 	"runtime"
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
 
-func CreateVethPair(hostIfName, contIfName, netnsPath string) error {
-	// Lock thread (required for netns operations)
+func CreateStableVeth(name, ifName, netnsPath string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	// Save current (host) namespace
-	hostNs, err := netns.Get()
+	hostIf := fmt.Sprintf("veth-%s", name)
+	peerIf := "tmppeer0"
+
+	ns, err := netns.GetFromPath(netnsPath)
 	if err != nil {
 		return err
 	}
-	defer hostNs.Close()
+	defer ns.Close()
 
-	// Open target (container/pod) namespace
-	targetNs, err := netns.GetFromPath(netnsPath)
-	if err != nil {
-		return err
-	}
-	defer targetNs.Close()
+	origNS, _ := netns.Get()
+	defer netns.Set(origNS)
 
-	// Create veth pair
+	// Create veth in host
 	veth := &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:  hostIfName,
-			MTU:   1500,
-			Flags: net.FlagUp,
-		},
-		PeerName: contIfName,
+		LinkAttrs: netlink.LinkAttrs{Name: hostIf, MTU: 1500},
+		PeerName:  peerIf,
 	}
-
 	if err := netlink.LinkAdd(veth); err != nil {
 		return err
 	}
 
-	// Get host side of veth
-	hostLink, err := netlink.LinkByName(hostIfName)
-	if err != nil {
+	// Move peer to container netns
+	peerLink, _ := netlink.LinkByName(peerIf)
+	if err := netlink.LinkSetNsFd(peerLink, int(ns)); err != nil {
 		return err
 	}
+
+	// Configure peer inside container netns
+	netns.Set(ns)
+	peerLink, _ = netlink.LinkByName(peerIf)
+	netlink.LinkSetName(peerLink, ifName) // final container name
+	netlink.LinkSetUp(peerLink)
+	netns.Set(origNS)
 
 	// Bring up host side
-	if err := netlink.LinkSetUp(hostLink); err != nil {
-		return err
-	}
-
-	// Get container side
-	contLink, err := netlink.LinkByName(contIfName)
-	if err != nil {
-		return err
-	}
-
-	// Move container side into target namespace
-	if err := netlink.LinkSetNsFd(contLink, int(targetNs)); err != nil {
-		return err
-	}
-
-	// Now enter the container namespace to configure the interface
-	if err := netns.Set(targetNs); err != nil {
-		return err
-	}
-	defer netns.Set(hostNs) // return to host ns
-
-	// Re-fetch the link (now inside netns)
-	contLink, err = netlink.LinkByName(contIfName)
-	if err != nil {
-		return err
-	}
-
-	// Rename it to the desired name (e.g., eth1)
-	if err := netlink.LinkSetName(contLink, contIfName); err != nil {
-		return err
-	}
-
-	// Bring it up
-	if err := netlink.LinkSetUp(contLink); err != nil {
-		return err
-	}
-
-	log.Printf("✅ Created veth: host=%s, container=%s", hostIfName, contIfName)
+	hostLink, _ := netlink.LinkByName(hostIf)
+	netlink.LinkSetUp(hostLink)
+	log.Printf("✅ Created veth: host=%s, container=%s", name, ifName)
 	return nil
 }

@@ -30,7 +30,7 @@ func CreateClient() (*kubernetes.Clientset, error) {
 }
 
 func createConfig() (*rest.Config, error) {
-	configFile := filepath.Join("/etc/cni/net.d/multus.d", "multus.kubeconfig")
+	configFile := filepath.Join("/etc/rancher/k3s", "k3s.yaml")
 	_, err := os.Stat(configFile)
 	if err != nil {
 		return nil, err

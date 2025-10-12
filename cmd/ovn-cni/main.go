@@ -44,7 +44,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	vmName := labels["vm.kubevirt.io/name"]
 
 	// 2. Create veth pair
-	err = net_utils.CreateVethPair("veth-"+vmName[:8], args.IfName, args.Netns)
+	err = net_utils.CreateStableVeth("veth-"+vmName[:8], args.IfName, args.Netns)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
 		return err
