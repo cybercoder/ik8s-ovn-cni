@@ -6,19 +6,22 @@ import (
 	"log"
 
 	ovsModel "github.com/cybercoder/ik8s-ovn-cni/pkg/ovs/models"
+	"github.com/google/uuid"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
 func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 	ctx := context.Background()
-
+	ifaceUUID := uuid.New()
+	portUUID := uuid.New()
 	bridge := &ovsModel.Bridge{Name: bridgeName}
 	if err := c.ovsClient.Get(ctx, bridge); err != nil {
 		return fmt.Errorf("failed to get bridge %q: %v", bridgeName, err)
 	}
 
 	iface := &ovsModel.Interface{
+		UUID: ifaceUUID.String(),
 		Name: portName,
 		Type: ifaceType, // "system" for veth, "internal" if OVS creates it
 	}
@@ -28,6 +31,7 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 	}
 
 	port := &ovsModel.Port{
+		UUID:       portUUID.String(),
 		Name:       portName,
 		Interfaces: []string{iface.Name},
 	}
@@ -53,9 +57,9 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 		return fmt.Errorf("transaction failed: %v", err)
 	}
 
-	for _, r := range reply {
+	for i, r := range reply {
 		if r.Error != "" {
-			log.Printf("OVSDB error: %s (%s)", r.Error, r.Details)
+			log.Printf("OVSDB error: %d %s (%s)", i, r.Error, r.Details)
 		}
 	}
 	log.Printf("✅ Added port %s to bridge %s (type=%s)", portName, bridgeName, ifaceType)
