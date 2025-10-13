@@ -9,7 +9,8 @@ import (
 )
 
 // CreateLogicalPort creates a new logical port and attaches it to a logical switch
-func (c *Client) CreateLogicalPort(ctx context.Context, lsName, portName, mac, ip string) error {
+func (c *Client) CreateLogicalPort(lsName, portName, mac, ip string) error {
+	ctx := context.Background()
 	// Build addresses field
 	address := "dynamic"
 	if mac != "" && ip != "" {

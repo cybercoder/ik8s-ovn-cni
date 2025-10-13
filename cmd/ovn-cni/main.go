@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -13,6 +12,7 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovn"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -27,6 +27,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	log.SetOutput(f)
 	oclient, err := ovs.CreateOVSclient()
+	if err != nil {
+		return err
+	}
+	ovnClient, err := ovn.CreateOvnNbClient("tcp://192.168.12.177:6441")
 	if err != nil {
 		return err
 	}
@@ -60,12 +64,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
 	}
+
+	// 3. Add port to ovs
 	err = oclient.AddPort("br-int", hostIf, "system")
 	if err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
-		return err
+		// return err
 	}
-	time.Sleep(60 * time.Second)
+
+	// 4. Add port to ovn logical switch
+
+	err = ovnClient.CreateLogicalPort("public", hostIf, "", "")
+	if err != nil {
+		log.Printf("Error creating logical port on logical switch public: %v", err)
+		// return err
+	}
+
 	return nil
 }
 
