@@ -59,8 +59,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
 	}
-
-	err = oclient.AddPort("br-int", hostIf)
+	portConfig := &ovs.PortConfig{
+		InterfaceType: "internal",
+		ExternalIDs: map[string]string{
+			"vm-id": "vm-123",
+			"owner": "k8s",
+		},
+	}
+	err = oclient.AddPortToBridge("br-int", hostIf, portConfig)
+	// err = oclient.AddPort("br-int", hostIf, "system")
 	if err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		return err

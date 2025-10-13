@@ -14,9 +14,9 @@ type Client struct {
 
 func CreateOVSclient() (*Client, error) {
 	dbModel, err := model.NewClientDBModel("Open_vSwitch", map[string]model.Model{
-		OvsBridgeTable:    &Bridge{},
-		OvsPortTable:      &Port{},
-		OvsInterfaceTable: &Interface{},
+		"Bridge":    &Bridge{},
+		"Port":      &Port{},
+		"Interface": &Interface{},
 	})
 	if err != nil {
 		log.Printf("failed to create DB model: %v", err)

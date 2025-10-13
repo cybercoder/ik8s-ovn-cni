@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -89,4 +90,9 @@ func CreateStableVeth(hostIf, ifName, netnsPath string) error {
 		hostIf, ifName, netnsPath)
 
 	return nil
+}
+
+func GenerateUUID() string {
+	// In production, use github.com/google/uuid
+	return fmt.Sprintf("uuid-%d", time.Now().UnixNano())
 }
