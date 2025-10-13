@@ -37,7 +37,11 @@ func CreateOVSclient() (*Client, error) {
 		log.Printf("failed to connect to OVSDB: %v", err)
 		return nil, err
 	}
-
+	_, err = ovsClient.MonitorAll(ctx)
+	if err != nil {
+		log.Printf("failed to monitor OVSDB: %v", err)
+		return nil, err
+	}
 	return &Client{ovsClient: ovsClient}, nil
 }
 
