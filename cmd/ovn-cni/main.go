@@ -30,7 +30,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	ovnClient, err := ovn.CreateOvnNbClient("tcp://192.168.12.177:6441")
+	ovnClient, err := ovn.CreateOvnNbClient("tcp://192.168.12.177:6641")
 	if err != nil {
 		return err
 	}
