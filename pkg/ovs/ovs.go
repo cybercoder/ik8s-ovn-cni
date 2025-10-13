@@ -33,7 +33,7 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 	port := &ovsModel.Port{
 		UUID:       portUUID.String(),
 		Name:       portName,
-		Interfaces: []string{iface.Name},
+		Interfaces: []string{iface.UUID},
 	}
 	portOp, err := c.ovsClient.Create(port)
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 		{
 			Field:   &bridge.Ports,
 			Mutator: ovsdb.MutateOperationInsert,
-			Value:   []string{port.Name},
+			Value:   []string{port.UUID},
 		},
 	}
 	mutateOps, err := c.ovsClient.Where(bridge).Mutate(bridge, mutations...)
