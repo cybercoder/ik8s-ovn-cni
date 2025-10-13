@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	ovsModels "github.com/cybercoder/ik8s-ovn-cni/pkg/ovs/models"
 	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/ovn-kubernetes/libovsdb/model"
 )
@@ -14,9 +15,9 @@ type Client struct {
 
 func CreateOVSclient() (*Client, error) {
 	dbModel, err := model.NewClientDBModel("Open_vSwitch", map[string]model.Model{
-		"Bridge":    &Bridge{},
-		"Port":      &Port{},
-		"Interface": &Interface{},
+		"Bridge":    &ovsModels.Bridge{},
+		"Port":      &ovsModels.Port{},
+		"Interface": &ovsModels.Interface{},
 	})
 	if err != nil {
 		log.Printf("failed to create DB model: %v", err)

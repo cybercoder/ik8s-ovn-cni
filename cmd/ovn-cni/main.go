@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -59,19 +60,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
 	}
-	portConfig := &ovs.PortConfig{
-		InterfaceType: "internal",
-		ExternalIDs: map[string]string{
-			"vm-id": "vm-123",
-			"owner": "k8s",
-		},
-	}
-	err = oclient.AddPortToBridge("br-int", hostIf, portConfig)
-	// err = oclient.AddPort("br-int", hostIf, "system")
+	err = oclient.AddPort("br-int", hostIf, "system")
 	if err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		return err
 	}
+	time.Sleep(60 * time.Second)
 	return nil
 }
 

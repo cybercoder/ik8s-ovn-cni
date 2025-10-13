@@ -6,91 +6,24 @@ import (
 	"log"
 
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
+	ovsModel "github.com/cybercoder/ik8s-ovn-cni/pkg/ovs/models"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
-func (c *Client) AddPortToBridge(bridgeName, portName string, portConfig *PortConfig) error {
-	ctx := context.Background()
-
-	interfaceUUID := net_utils.GenerateUUID()
-	portUUID := net_utils.GenerateUUID()
-
-	// Create interface and port
-	iface := &Interface{
-		UUID: interfaceUUID,
-		Name: portName,
-		Type: portConfig.InterfaceType,
-	}
-
-	if len(portConfig.InterfaceOptions) > 0 {
-		iface.Options = portConfig.InterfaceOptions
-	}
-
-	port := &Port{
-		UUID:       portUUID,
-		Name:       portName,
-		Interfaces: []string{interfaceUUID},
-	}
-
-	if len(portConfig.ExternalIDs) > 0 {
-		port.ExternalIDs = portConfig.ExternalIDs
-	}
-
-	// Single transaction with all operations
-	var operations []ovsdb.Operation
-
-	// Create interface
-	ifaceOp, err := c.ovsClient.Create(iface)
-	if err != nil {
-		return err
-	}
-	operations = append(operations, ifaceOp...)
-
-	// Create port
-	portOp, err := c.ovsClient.Create(port)
-	if err != nil {
-		return err
-	}
-	operations = append(operations, portOp...)
-
-	// Add port to bridge using mutate with insert
-	mutateOp, err := c.ovsClient.Where(&Bridge{Name: bridgeName}).Mutate(&Bridge{}, model.Mutation{
-		Field:   "ports",
-		Mutator: "insert",
-		Value:   []string{portUUID},
-	})
-	if err != nil {
-		return err
-	}
-	operations = append(operations, mutateOp...)
-
-	// Execute all in one transaction
-	results, err := c.ovsClient.Transact(ctx, operations...)
-	if err != nil {
-		return fmt.Errorf("transaction failed: %v", err)
-	}
-
-	for i, result := range results {
-		if result.Error != "" {
-			return fmt.Errorf("operation %d failed: %s", i, result.Error)
-		}
-	}
-
-	return nil
-}
-
 func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 	ctx := context.Background()
-
+	interfaceUUID := net_utils.GenerateUUID()
+	portUUID := net_utils.GenerateUUID()
 	// 1️⃣ Find the bridge
-	bridge := &Bridge{Name: bridgeName}
+	bridge := &ovsModel.Bridge{Name: bridgeName}
 	if err := c.ovsClient.Get(ctx, bridge); err != nil {
 		return fmt.Errorf("failed to get bridge %q: %v", bridgeName, err)
 	}
 
 	// 2️⃣ Create Interface row
-	iface := &Interface{
+	iface := &ovsModel.Interface{
+		UUID: interfaceUUID,
 		Name: portName,
 		Type: ifaceType, // "system" for veth, "internal" if OVS creates it
 	}
@@ -99,7 +32,8 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 	}
 
 	// 3️⃣ Create Port row, referencing Interface
-	port := &Port{
+	port := &ovsModel.Port{
+		UUID:       portUUID,
 		Name:       portName,
 		Interfaces: []string{iface.Name},
 	}
