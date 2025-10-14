@@ -15,6 +15,7 @@ type Client struct {
 func CreateOvnNbClient(nbEndpoint string) (*Client, error) {
 	// Define database model
 	dbModel, err := model.NewClientDBModel("OVN_Northbound", map[string]model.Model{
+		"Logical_Switch":      &models.LogicalSwitch{},
 		"Logical_Switch_Port": &models.LogicalSwitchPort{},
 		// Add other table mappings
 	})
@@ -23,25 +24,25 @@ func CreateOvnNbClient(nbEndpoint string) (*Client, error) {
 	}
 
 	// Create client with connection options
-	ovsClient, err := client.NewOVSDBClient(dbModel, client.WithEndpoint(nbEndpoint))
+	nbClient, err := client.NewOVSDBClient(dbModel, client.WithEndpoint(nbEndpoint))
 	if err != nil {
 		return nil, err
 	}
 
 	// Establish connection
 	ctx := context.Background()
-	err = ovsClient.Connect(ctx)
+	err = nbClient.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start monitoring for cache updates
-	_, err = ovsClient.MonitorAll(ctx)
+	_, err = nbClient.MonitorAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Client{nbClient: ovsClient}, nil
+	return &Client{nbClient: nbClient}, nil
 }
 
 func (c *Client) Close() {
