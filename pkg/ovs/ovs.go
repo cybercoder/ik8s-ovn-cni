@@ -25,6 +25,7 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 		Name: portName,
 		Type: ifaceType, // "system" for veth, "internal" if OVS creates it
 	}
+
 	ifaceOp, err := c.ovsClient.Create(iface)
 	if err != nil {
 		return fmt.Errorf("failed to create interface: %v", err)

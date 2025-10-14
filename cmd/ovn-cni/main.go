@@ -12,7 +12,7 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
-	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovn"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,7 +30,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	ovnClient, err := ovn.CreateOvnNbClient("tcp://192.168.12.177:6641")
+	ovnClient, err := ovnnb.CreateOvnNbClient("tcp://192.168.12.177:6641")
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// 4. Add port to ovn logical switch
 
-	err = ovnClient.CreateLogicalPort("public", hostIf, "", "")
+	err = ovnClient.CreateLogicalPort("public", hostIf)
 	if err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		// return err

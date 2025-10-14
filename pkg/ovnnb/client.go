@@ -1,9 +1,9 @@
-package ovn
+package ovnnb
 
 import (
 	"context"
 
-	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovn/ovnnb"
+	models "github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb/models"
 	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/ovn-kubernetes/libovsdb/model"
 )
@@ -15,7 +15,7 @@ type Client struct {
 func CreateOvnNbClient(nbEndpoint string) (*Client, error) {
 	// Define database model
 	dbModel, err := model.NewClientDBModel("OVN_Northbound", map[string]model.Model{
-		"Logical_Switch_Port": &ovnnb.LogicalSwitchPort{},
+		"Logical_Switch_Port": &models.LogicalSwitchPort{},
 		// Add other table mappings
 	})
 	if err != nil {

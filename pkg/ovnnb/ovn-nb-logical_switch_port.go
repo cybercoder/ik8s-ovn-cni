@@ -1,68 +1,55 @@
-package ovn
+package ovnnb
 
 import (
 	"context"
 	"fmt"
+	"log"
 
-	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovn/ovnnb"
+	models "github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb/models"
+	"github.com/google/uuid"
+	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
 // CreateLogicalPort creates a new logical port and attaches it to a logical switch
-func (c *Client) CreateLogicalPort(lsName, portName, mac, ip string) error {
+func (c *Client) CreateLogicalPort(lsName, lspName string) error {
 	ctx := context.Background()
-	// Build addresses field
-	address := "dynamic"
-	if mac != "" && ip != "" {
-		address = fmt.Sprintf("%s %s", mac, ip)
+	lspUUID := uuid.New().String()
+	ls := &models.LogicalSwitch{Name: lsName}
+	if err := c.nbClient.Get(ctx, ls); err != nil {
+		return fmt.Errorf("failed to get logical switch %s: %v", ls.Name, err)
 	}
-
-	lsp := map[string]any{
-		"name":      portName,
-		"addresses": ovsdb.OvsSet{GoSet: []any{address}},
+	lsp := &models.LogicalSwitchPort{
+		UUID: lspUUID,
+		Name: lspName,
 	}
-
-	// Insert Logical_Switch_Port
-	insertOp := ovsdb.Operation{
-		Op:       "insert",
-		Table:    "Logical_Switch_Port",
-		Row:      lsp,
-		UUIDName: "lsp",
+	lspOp, err := c.nbClient.Create(lsp)
+	if err != nil {
+		return fmt.Errorf("failed to create logical port %s: %v", lsp.Name, err)
 	}
-
-	// Mutate Logical_Switch to include this port
-	mutateOp := ovsdb.Operation{
-		Op:    "mutate",
-		Table: "Logical_Switch",
-		Where: []ovsdb.Condition{
-			{
-				Column:   "name",
-				Function: ovsdb.ConditionEqual,
-				Value:    lsName,
-			},
-		},
-		Mutations: []ovsdb.Mutation{
-			{
-				Column:  "ports",
-				Mutator: ovsdb.MutateOperationInsert,
-				Value:   ovsdb.OvsSet{GoSet: []any{ovsdb.UUID{GoUUID: "lsp"}}},
-			},
+	mutations := []model.Mutation{
+		{
+			Field:   &ls.Ports,
+			Mutator: ovsdb.MutateOperationInsert,
+			Value:   []string{lsp.UUID},
 		},
 	}
-
-	ops := []ovsdb.Operation{insertOp, mutateOp}
-
+	mutateOps, err := c.nbClient.Where(ls).Mutate(ls, mutations...)
+	if err != nil {
+		return fmt.Errorf("failed to prepare mutation: %v", err)
+	}
+	ops := append(lspOp, mutateOps...)
 	reply, err := c.nbClient.Transact(ctx, ops...)
 	if err != nil {
-		return fmt.Errorf("transaction error: %w", err)
+		return fmt.Errorf("transaction failed: %v", err)
 	}
 
-	for _, r := range reply {
+	for i, r := range reply {
 		if r.Error != "" {
-			return fmt.Errorf("OVN NB error: %s", r.Error)
+			log.Printf("OVSNB error: %d %s (%s)", i, r.Error, r.Details)
 		}
 	}
-
+	log.Printf("✅ Added logicalport %s to logicalswitch %s ", lspName, lsName)
 	return nil
 }
 
@@ -91,8 +78,8 @@ func (c *Client) DeleteLogicalPort(ctx context.Context, portName string) error {
 // ListLogicalPorts returns all ports on a given logical switch
 func (c *Client) ListLogicalPorts(ctx context.Context, lsName string) ([]string, error) {
 	// Get Logical_Switch by name
-	lsObj := []ovnnb.LogicalSwitch{}
-	err := c.nbClient.Where(func(ls *ovnnb.LogicalSwitch) bool {
+	lsObj := []models.LogicalSwitch{}
+	err := c.nbClient.Where(func(ls *models.LogicalSwitch) bool {
 		return ls.Name == lsName
 	}).List(ctx, &lsObj)
 	if err != nil {
