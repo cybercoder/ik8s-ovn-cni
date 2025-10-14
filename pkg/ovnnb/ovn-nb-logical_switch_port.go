@@ -75,6 +75,12 @@ func (c *Client) DeleteLogicalPort(ctx context.Context, portName string) error {
 	return nil
 }
 
+func (c *Client) ListLogicalSwitches() ([]models.LogicalSwitch, error) {
+	var switches []models.LogicalSwitch
+	err := c.nbClient.List(context.Background(), &switches)
+	return switches, err
+}
+
 // ListLogicalPorts returns all ports on a given logical switch
 func (c *Client) ListLogicalPorts(ctx context.Context, lsName string) ([]string, error) {
 	// Get Logical_Switch by name

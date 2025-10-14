@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -34,6 +35,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	swList, err := ovnClient.ListLogicalSwitches()
+	if err != nil {
+		log.Printf("error listing logical switches: %v", err)
+		return err
+	}
+	swListData, err := json.Marshal(swList)
+	if err != nil {
+		log.Printf("error marshaling logical switches: %v", err)
+		return err
+	}
+	log.Printf("sw list %s", string(swListData))
+
 	k8sArgs := cniTypes.CniKubeArgs{}
 	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
 		log.Printf("error loading args: %v", err)
