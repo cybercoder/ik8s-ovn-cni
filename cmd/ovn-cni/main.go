@@ -67,7 +67,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// 3. Add port to ovs
-	err = oclient.AddPort("br-int", hostIf, "system")
+	err = oclient.AddPort("br-int", hostIf, "system", *hostMAC)
 	if err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		// return err

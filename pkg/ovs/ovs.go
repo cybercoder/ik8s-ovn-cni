@@ -11,7 +11,7 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
-func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
+func (c *Client) AddPort(bridgeName, portName, ifaceType, hostmac string) error {
 	ctx := context.Background()
 	ifaceUUID := uuid.New()
 	portUUID := uuid.New()
@@ -24,6 +24,10 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType string) error {
 		UUID: ifaceUUID.String(),
 		Name: portName,
 		Type: ifaceType, // "system" for veth, "internal" if OVS creates it
+		MAC:  &hostmac,
+		ExternalIDs: map[string]string{
+			"iface-id": portName,
+		},
 	}
 
 	ifaceOp, err := c.ovsClient.Create(iface)
