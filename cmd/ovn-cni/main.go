@@ -61,7 +61,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	// 2. Create veth pair
 
-	hostMAC, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
+	err, hostMAC, containerMac := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
@@ -76,7 +76,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// 4. Add port to ovn logical switch
 	log.Printf("mac address %s", *hostMAC)
-	err = ovnClient.CreateLogicalPort("public", hostIf, *hostMAC)
+	err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
 	if err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		// return err
