@@ -8,6 +8,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
@@ -81,7 +82,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// return err
 	}
 
-	return nil
+	// ✅ Build minimal CNI result
+	result := &types100.Result{
+
+		CNIVersion: version.Current(),
+		Interfaces: []*types100.Interface{
+			{
+				Name:    args.IfName,
+				Mac:     *hostMAC,
+				Sandbox: args.Netns,
+			},
+		},
+	}
+
+	// ✅ Print JSON to stdout for CNI runtime
+	return types.PrintResult(result, version.Current())
 }
 
 func cmdDel(args *skel.CmdArgs) error {
