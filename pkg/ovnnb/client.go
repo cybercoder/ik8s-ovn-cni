@@ -22,6 +22,11 @@ func CreateOvnNbClient(nbEndpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	dbModel.SetIndexes(map[string][]model.ClientIndex{
+		"Logical_Switch": {
+			{Columns: []model.ColumnKey{{Column: "name"}}},
+		},
+	})
 
 	// Create client with connection options
 	nbClient, err := client.NewOVSDBClient(dbModel, client.WithEndpoint(nbEndpoint))

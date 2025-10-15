@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -36,18 +35,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	swList, err := ovnClient.ListLogicalSwitches()
-	if err != nil {
-		log.Printf("error listing logical switches: %v", err)
-		return err
-	}
-	swListData, err := json.Marshal(swList)
-	if err != nil {
-		log.Printf("error marshaling logical switches: %v", err)
-		return err
-	}
-	log.Printf("sw list %s", string(swListData))
-
 	k8sArgs := cniTypes.CniKubeArgs{}
 	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
 		log.Printf("error loading args: %v", err)
@@ -73,7 +60,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	// 2. Create veth pair
 
-	err = net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
+	hostMAC, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
@@ -87,8 +74,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// 4. Add port to ovn logical switch
-
-	err = ovnClient.CreateLogicalPort("public", hostIf)
+	log.Printf("mac address %s", *hostMAC)
+	err = ovnClient.CreateLogicalPort("public", hostIf, *hostMAC)
 	if err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		// return err

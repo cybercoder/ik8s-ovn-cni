@@ -12,16 +12,28 @@ import (
 )
 
 // CreateLogicalPort creates a new logical port and attaches it to a logical switch
-func (c *Client) CreateLogicalPort(lsName, lspName string) error {
+func (c *Client) CreateLogicalPort(lsName, lspName, hostMAC string) error {
 	ctx := context.Background()
 	lspUUID := uuid.New().String()
 	ls := &models.LogicalSwitch{Name: lsName}
-	if err := c.nbClient.Get(ctx, ls); err != nil {
-		return fmt.Errorf("failed to get logical switch %s: %v", ls.Name, err)
+
+	results := []models.LogicalSwitch{}
+
+	err := c.nbClient.WhereCache(func(lsw *models.LogicalSwitch) bool {
+		return lsw.Name == lsName
+	}).List(ctx, &results)
+	if err != nil || (len(results) == 0) {
+		return fmt.Errorf("failed to find logical switch %s: %v", ls.Name, err)
 	}
+
 	lsp := &models.LogicalSwitchPort{
-		UUID: lspUUID,
-		Name: lspName,
+		UUID:      lspUUID,
+		Name:      lspName,
+		Addresses: []string{fmt.Sprintf("%s %s", hostMAC, "dynamic")},
+		// ExternalIDs: map[string]string{
+		// 	"iface-id": "pod1",
+		// 	"pod":      "true",
+		// },
 	}
 	lspOp, err := c.nbClient.Create(lsp)
 	if err != nil {
