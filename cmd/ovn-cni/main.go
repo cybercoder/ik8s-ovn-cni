@@ -12,7 +12,6 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
-	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,22 +60,31 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	// 2. Create veth pair
 
-	hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
-	if err != nil {
-		log.Printf("Error creating veth pair: %v", err)
-		// return err
-	}
+	// hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
+	// if err != nil {
+	// 	log.Printf("Error creating veth pair: %v", err)
+	// 	// return err
+	// }
 
-	// 3. Add port to ovs
-	err = oclient.AddPort("br-int", hostIf, "system", *hostMAC)
-	if err != nil {
-		log.Printf("Error adding port to ovs: %v", err)
-		// return err
-	}
+	// // 3. Add port to ovs
+	// err = oclient.AddPort("br-int", hostIf, "system", *hostMAC)
+	// if err != nil {
+	// 	log.Printf("Error adding port to ovs: %v", err)
+	// 	// return err
+	// }
 
+	err = oclient.AddManagedTapPort("br-int", hostIf, "")
+	if err != nil {
+		log.Printf("Error on Add managed tap port to br-int: %v", err)
+	}
+	realmac, err := oclient.GetPortMAC(hostIf)
+	if err != nil {
+		log.Printf("Error on getting mac address for %s: %v", hostIf, err)
+	}
 	// 4. Add port to ovn logical switch
-	log.Printf("mac address %s", *hostMAC)
-	err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
+	log.Printf("mac address %s", realmac)
+	// err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
+	err = ovnClient.CreateLogicalPort("public", hostIf, realmac)
 	if err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		// return err
@@ -89,7 +97,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		Interfaces: []*types100.Interface{
 			{
 				Name:    args.IfName,
-				Mac:     *hostMAC,
+				Mac:     realmac,
 				Sandbox: args.Netns,
 			},
 		},
