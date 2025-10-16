@@ -73,8 +73,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// 	log.Printf("Error adding port to ovs: %v", err)
 	// 	// return err
 	// }
-
-	err = oclient.AddManagedTapPort("br-int", hostIf)
+	realmac, _ := net_utils.GenerateMAC(hostIf)
+	err = oclient.AddManagedTapPort("br-int", hostIf, realmac)
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
@@ -83,7 +83,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// 	log.Printf("Error on getting mac address for %s: %v", hostIf, err)
 	// }
 
-	realmac, _ := net_utils.GenerateMAC(hostIf)
 	// 4. Add port to ovn logical switch
 	log.Printf("mac address %s", realmac)
 	// err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
