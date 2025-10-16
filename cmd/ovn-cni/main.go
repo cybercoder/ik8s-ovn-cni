@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -73,12 +74,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// 	log.Printf("Error adding port to ovs: %v", err)
 	// 	// return err
 	// }
-	realmac, _ := net_utils.GenerateMAC(hostIf)
-	err = oclient.AddManagedTapPort("br-int", hostIf, realmac)
+	// realmac, _ := net_utils.GenerateMAC(hostIf)
+	err = oclient.AddManagedTapPort("br-int", hostIf)
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
-	// realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
+	realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
 	// if err != nil {
 	// 	log.Printf("Error on getting mac address for %s: %v", hostIf, err)
 	// }
@@ -91,7 +92,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		// return err
 	}
-
+	err = net_utils.BringInterfaceUp(hostIf)
+	if err != nil {
+		log.Printf("%v", err)
+	}
 	// ✅ Build minimal CNI result
 	result := &types100.Result{
 

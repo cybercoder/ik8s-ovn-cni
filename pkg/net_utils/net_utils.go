@@ -96,3 +96,14 @@ func GenerateMAC(unique string) (string, error) {
 	}
 	return mac.String(), nil
 }
+
+func BringInterfaceUp(nic string) error {
+	link, err := netlink.LinkByName(nic)
+	if err != nil {
+		return fmt.Errorf("cannot find host interface %s: %w", nic, err)
+	}
+	if err := netlink.LinkSetUp(link); err != nil {
+		return fmt.Errorf("failed to bring host interface up: %w", err)
+	}
+	return nil
+}
