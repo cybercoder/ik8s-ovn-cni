@@ -3,7 +3,9 @@ package net_utils
 import (
 	"fmt"
 	"log"
+	"os"
 	"runtime"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -80,4 +82,15 @@ func CreateStableVeth(hostIf, ifName, netnsPath string) (*string, *string, error
 	log.Printf("✅ Created veth pair: host=%s (%s) ↔ container=%s (%s)", hostIf, hostMAC, ifName, containerMAC)
 
 	return &hostMAC, &containerMAC, nil
+}
+
+func WaitForNetns(netnsPath string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(netnsPath); err == nil {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("timeout waiting for netns %s", netnsPath)
 }

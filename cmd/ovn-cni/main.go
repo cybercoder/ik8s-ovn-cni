@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -55,6 +56,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
+	if err := net_utils.WaitForNetns(args.Netns, 10*time.Second); err != nil {
+		log.Printf("Network namespace not ready: %v", err)
+		return err
+	}
 	hostIf := fmt.Sprintf("veth-%s", vmName)
 	if len(hostIf) > 15 {
 		hostIf = hostIf[:15]
