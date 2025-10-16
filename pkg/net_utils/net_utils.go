@@ -107,3 +107,17 @@ func BringInterfaceUp(nic string) error {
 	}
 	return nil
 }
+
+func GetInterfaceMAC(ifName string) (string, error) {
+	link, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get link %s: %w", ifName, err)
+	}
+
+	mac := link.Attrs().HardwareAddr.String()
+	if mac == "" {
+		return "", fmt.Errorf("interface %s has no MAC address", ifName)
+	}
+
+	return mac, nil
+}
