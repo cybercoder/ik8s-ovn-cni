@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	ovsModel "github.com/cybercoder/ik8s-ovn-cni/pkg/ovs/models"
 	"github.com/google/uuid"
@@ -163,4 +164,22 @@ func (c *Client) GetPortMAC(portName string) (string, error) {
 		return "", fmt.Errorf("no mac_in_use found")
 	}
 	return *iface.MACInUse, nil
+}
+
+func (c *Client) WaitForPortMAC(portName string, timeout time.Duration) (string, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	deadline := time.Now().Add(timeout)
+
+	for range ticker.C {
+		mac, err := c.GetPortMAC(portName)
+		if err == nil && mac != "" {
+			return mac, nil
+		}
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("timeout waiting for port %s MAC", portName)
+		}
+	}
+	return "", fmt.Errorf("unexpected exit waiting for port %s MAC", portName)
 }

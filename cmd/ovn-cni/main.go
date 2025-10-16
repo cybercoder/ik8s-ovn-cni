@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -77,10 +78,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
-	realmac, err := oclient.GetPortMAC(hostIf)
+	realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
 	if err != nil {
 		log.Printf("Error on getting mac address for %s: %v", hostIf, err)
 	}
+
 	// 4. Add port to ovn logical switch
 	log.Printf("mac address %s", realmac)
 	// err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
