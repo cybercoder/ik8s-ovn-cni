@@ -61,7 +61,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	// 2. Create veth pair
 
-	err, hostMAC, containerMac := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
+	hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
