@@ -1,8 +1,10 @@
 package net_utils
 
 import (
+	"crypto/md5"
 	"fmt"
 	"log"
+	"net"
 	"runtime"
 
 	"github.com/vishvananda/netlink"
@@ -80,4 +82,17 @@ func CreateStableVeth(hostIf, ifName, netnsPath string) (*string, *string, error
 	log.Printf("✅ Created veth pair: host=%s (%s) ↔ container=%s (%s)", hostIf, hostMAC, ifName, containerMAC)
 
 	return &hostMAC, &containerMAC, nil
+}
+
+func GenerateMAC(unique string) (string, error) {
+	hash := md5.Sum([]byte(unique)) // 16 bytes
+	mac := net.HardwareAddr{
+		0x02,    // Locally administered, unicast
+		hash[0], // Use hash bytes for uniqueness
+		hash[1],
+		hash[2],
+		hash[3],
+		hash[4],
+	}
+	return mac.String(), nil
 }

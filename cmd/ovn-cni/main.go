@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -13,6 +12,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,11 +78,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
-	realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
-	if err != nil {
-		log.Printf("Error on getting mac address for %s: %v", hostIf, err)
-	}
+	// realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
+	// if err != nil {
+	// 	log.Printf("Error on getting mac address for %s: %v", hostIf, err)
+	// }
 
+	realmac, _ := net_utils.GenerateMAC(hostIf)
 	// 4. Add port to ovn logical switch
 	log.Printf("mac address %s", realmac)
 	// err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
