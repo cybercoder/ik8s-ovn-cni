@@ -11,7 +11,7 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
-func (c *Client) AddManagedTapPort(bridgeName, portName, mac string) error {
+func (c *Client) AddManagedTapPort(bridgeName, portName string) error {
 	ctx := context.Background()
 
 	ifaceUUID := uuid.New()
@@ -25,8 +25,7 @@ func (c *Client) AddManagedTapPort(bridgeName, portName, mac string) error {
 	iface := &ovsModel.Interface{
 		UUID: ifaceUUID.String(),
 		Name: portName,
-		Type: "managed_tap",
-		MAC:  &mac,
+		Type: "tap",
 		ExternalIDs: map[string]string{
 			"iface-id": portName,
 			// optional flag: mark as managed for ovn-controller visibility
@@ -73,7 +72,7 @@ func (c *Client) AddManagedTapPort(bridgeName, portName, mac string) error {
 		}
 	}
 
-	log.Printf("✅ Created managed_tap port %q on bridge %q (MAC=%s)", portName, bridgeName, mac)
+	log.Printf("✅ Created managed_tap port %q on bridge %s.", portName, bridgeName)
 	return nil
 }
 

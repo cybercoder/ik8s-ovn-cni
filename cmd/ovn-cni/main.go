@@ -73,7 +73,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// 	// return err
 	// }
 
-	err = oclient.AddManagedTapPort("br-int", hostIf, "")
+	err = oclient.AddManagedTapPort("br-int", hostIf)
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
