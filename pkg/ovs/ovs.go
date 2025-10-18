@@ -14,11 +14,17 @@ import (
 func (c *Client) DelPort(bridgeName, portName string) error {
 	ctx := context.Background()
 	bridge := &ovsModel.Bridge{Name: bridgeName}
+	port := &ovsModel.Port{Name: portName}
+	err := c.ovsClient.Get(ctx, port)
+	if err != nil {
+		return fmt.Errorf("Error on finding ovs port %s: %v", portName, err)
+	}
+
 	mutations := []model.Mutation{
 		{
 			Field:   &bridge.Ports,
 			Mutator: ovsdb.MutateOperationDelete,
-			Value:   []string{portName},
+			Value:   []string{port.UUID},
 		},
 	}
 	mutateOps, err := c.ovsClient.Where(bridge).Mutate(bridge, mutations...)

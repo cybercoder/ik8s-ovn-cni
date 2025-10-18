@@ -105,6 +105,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	f, err := os.OpenFile("/var/log/ik8s-ovn-cni", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
+
 	ovnClient, err := ovnnb.CreateOvnNbClient("tcp:192.168.12.177:6641")
 	if err != nil {
 		log.Printf("error on creating ovn client: %v", err)
