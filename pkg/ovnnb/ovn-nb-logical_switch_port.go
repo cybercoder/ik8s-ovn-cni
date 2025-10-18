@@ -65,25 +65,26 @@ func (c *Client) CreateLogicalPort(lsName, lspName, hostMAC string) error {
 	return nil
 }
 
-// DeleteLogicalPort removes a logical port from OVN NB
-func (c *Client) DeleteLogicalPort(ctx context.Context, portName string) error {
-	delOp := ovsdb.Operation{
-		Op:    "delete",
-		Table: "Logical_Switch_Port",
-		Where: []ovsdb.Condition{
-			{
-				Column:   "name",
-				Function: ovsdb.ConditionEqual,
-				Value:    portName,
-			},
+func (c *Client) DeleteLogicalPort(lsName, lspName string) error {
+	ctx := context.Background()
+	ls := &models.LogicalSwitch{Name: lsName}
+	lsp := &models.LogicalSwitchPort{Name: lspName}
+
+	mutations := []model.Mutation{
+		{
+			Field:   &ls.Ports,
+			Mutator: ovsdb.MutateOperationDelete,
+			Value:   []string{lsp.Name},
 		},
 	}
-
-	_, err := c.nbClient.Transact(ctx, []ovsdb.Operation{delOp}...)
+	mutateOps, err := c.nbClient.Where(ls).Mutate(ls, mutations...)
 	if err != nil {
-		return fmt.Errorf("failed to delete port %s: %w", portName, err)
+		return fmt.Errorf("failed to prepare mutation: %v", err)
 	}
-
+	_, err = c.nbClient.Transact(ctx, mutateOps...)
+	if err != nil {
+		return fmt.Errorf("transaction failed: %v", err)
+	}
 	return nil
 }
 

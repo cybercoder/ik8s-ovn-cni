@@ -11,6 +11,27 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
+func (c *Client) DelPort(bridgeName, portName string) error {
+	ctx := context.Background()
+	bridge := &ovsModel.Bridge{Name: bridgeName}
+	mutations := []model.Mutation{
+		{
+			Field:   &bridge.Ports,
+			Mutator: ovsdb.MutateOperationDelete,
+			Value:   []string{portName},
+		},
+	}
+	mutateOps, err := c.ovsClient.Where(bridge).Mutate(bridge, mutations...)
+	if err != nil {
+		return fmt.Errorf("failed to prepare mutation: %v", err)
+	}
+	_, err = c.ovsClient.Transact(ctx, mutateOps...)
+	if err != nil {
+		return fmt.Errorf("transaction failed: %v", err)
+	}
+	return nil
+}
+
 func (c *Client) AddPort(bridgeName, portName, ifaceType, hostmac string) error {
 	ctx := context.Background()
 	ifaceUUID := uuid.New()
