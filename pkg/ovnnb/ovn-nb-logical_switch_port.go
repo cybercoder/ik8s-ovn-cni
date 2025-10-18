@@ -67,24 +67,67 @@ func (c *Client) CreateLogicalPort(lsName, lspName, hostMAC string) error {
 
 func (c *Client) DeleteLogicalPort(lsName, lspName string) error {
 	ctx := context.Background()
-	ls := &models.LogicalSwitch{Name: lsName}
-	lsp := &models.LogicalSwitchPort{Name: lspName}
 
+	// 1️⃣ Find Logical Switch from cache
+	lsResults := []models.LogicalSwitch{}
+	err := c.nbClient.WhereCache(func(ls *models.LogicalSwitch) bool {
+		return ls.Name == lsName
+	}).List(ctx, &lsResults)
+	if err != nil {
+		return fmt.Errorf("failed to query logical switch cache: %v", err)
+	}
+	if len(lsResults) == 0 {
+		return fmt.Errorf("logical switch %q not found", lsName)
+	}
+	ls := lsResults[0]
+
+	// 2️⃣ Find Logical Switch Port from cache
+	lspResults := []models.LogicalSwitchPort{}
+	err = c.nbClient.WhereCache(func(lsp *models.LogicalSwitchPort) bool {
+		return lsp.Name == lspName
+	}).List(ctx, &lspResults)
+	if err != nil {
+		return fmt.Errorf("failed to query logical switch port cache: %v", err)
+	}
+	if len(lspResults) == 0 {
+		log.Printf("⚠️ Port %q not found in cache, skipping delete", lspName)
+		return nil
+	}
+	lsp := lspResults[0]
+
+	// 3️⃣ Prepare mutation to remove port UUID from logical switch
 	mutations := []model.Mutation{
 		{
 			Field:   &ls.Ports,
 			Mutator: ovsdb.MutateOperationDelete,
-			Value:   []string{lsp.Name},
+			Value:   []string{lsp.UUID}, // ✅ Must use UUID
 		},
 	}
-	mutateOps, err := c.nbClient.Where(ls).Mutate(ls, mutations...)
+	mutateOps, err := c.nbClient.Where(&ls).Mutate(&ls, mutations...)
 	if err != nil {
-		return fmt.Errorf("failed to prepare mutation: %v", err)
+		return fmt.Errorf("failed to prepare logical switch mutation: %v", err)
 	}
-	_, err = c.nbClient.Transact(ctx, mutateOps...)
+
+	// 4️⃣ Prepare delete operation for logical switch port
+	delOps, err := c.nbClient.Where(&lsp).Delete()
+	if err != nil {
+		return fmt.Errorf("failed to prepare logical switch port delete: %v", err)
+	}
+
+	// 5️⃣ Run both in one transaction
+	ops := append(mutateOps, delOps...)
+	reply, err := c.nbClient.Transact(ctx, ops...)
 	if err != nil {
 		return fmt.Errorf("transaction failed: %v", err)
 	}
+
+	for i, r := range reply {
+		if r.Error != "" {
+			log.Printf("OVN NBDB error: %d %s (%s)", i, r.Error, r.Details)
+		}
+	}
+
+	log.Printf("🧹 Deleted logical port %s from switch %s", lspName, lsName)
 	return nil
 }
 
