@@ -13,13 +13,19 @@ import (
 
 func (c *Client) DelPort(bridgeName, portName string) error {
 	ctx := context.Background()
-	bridge := &ovsModel.Bridge{Name: bridgeName}
+
+	// 1. Get port and bridge objects
 	port := &ovsModel.Port{Name: portName}
-	err := c.ovsClient.Get(ctx, port)
-	if err != nil {
-		return fmt.Errorf("Error on finding ovs port %s: %v", portName, err)
+	if err := c.ovsClient.Get(ctx, port); err != nil {
+		return fmt.Errorf("failed to find port %s: %v", portName, err)
 	}
 
+	bridge := &ovsModel.Bridge{Name: bridgeName}
+	if err := c.ovsClient.Get(ctx, bridge); err != nil {
+		return fmt.Errorf("failed to find bridge %s: %v", bridgeName, err)
+	}
+
+	// 2. Mutate the bridge to remove the port UUID from its Ports set
 	mutations := []model.Mutation{
 		{
 			Field:   &bridge.Ports,
@@ -29,12 +35,39 @@ func (c *Client) DelPort(bridgeName, portName string) error {
 	}
 	mutateOps, err := c.ovsClient.Where(bridge).Mutate(bridge, mutations...)
 	if err != nil {
-		return fmt.Errorf("failed to prepare mutation: %v", err)
+		return fmt.Errorf("failed to prepare bridge mutation: %v", err)
 	}
-	_, err = c.ovsClient.Transact(ctx, mutateOps...)
+
+	// 3. Delete the port itself (and the interface)
+	portOp, err := c.ovsClient.Where(port).Delete()
+	if err != nil {
+		return fmt.Errorf("failed to prepare port delete: %v", err)
+	}
+
+	// 4. Also delete the Interface row(s) belonging to the port
+	for _, ifaceUUID := range port.Interfaces {
+		iface := &ovsModel.Interface{UUID: ifaceUUID}
+		ifaceOp, err := c.ovsClient.Where(iface).Delete()
+		if err != nil {
+			return fmt.Errorf("failed to prepare interface delete: %v", err)
+		}
+		portOp = append(portOp, ifaceOp...)
+	}
+
+	// 5. Run all operations in one transaction
+	ops := append(mutateOps, portOp...)
+	reply, err := c.ovsClient.Transact(ctx, ops...)
 	if err != nil {
 		return fmt.Errorf("transaction failed: %v", err)
 	}
+
+	for i, r := range reply {
+		if r.Error != "" {
+			log.Printf("OVSDB error: %d %s (%s)", i, r.Error, r.Details)
+		}
+	}
+
+	log.Printf("🧹 Deleted port %s from bridge %s", portName, bridgeName)
 	return nil
 }
 
