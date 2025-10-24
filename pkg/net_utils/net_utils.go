@@ -1,8 +1,12 @@
 package net_utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
@@ -13,7 +17,7 @@ import (
 
 // CreateStableVeth creates a veth pair, keeps host side in current namespace
 // and moves peer side to the target netns (container).
-func CreateStableVeth(hostIf, ifName, netnsPath string) (*string, *string, error) {
+func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *string, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -74,6 +78,11 @@ func CreateStableVeth(hostIf, ifName, netnsPath string) (*string, *string, error
 		return nil, nil, fmt.Errorf("failed to rename peer: %w", err)
 	}
 
+	if macAddress != "" {
+		if err := netlink.LinkSetHardwareAddr(peerLink, []byte(macAddress)); err != nil {
+			return nil, nil, fmt.Errorf("failed to set mac address for peer link: %w", err)
+		}
+	}
 	if err := netlink.LinkSetUp(peerLink); err != nil {
 		return nil, nil, fmt.Errorf("failed to bring up peer: %w", err)
 	}
@@ -93,4 +102,21 @@ func WaitForNetns(netnsPath string, timeout time.Duration) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return fmt.Errorf("timeout waiting for netns %s", netnsPath)
+}
+
+func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentResponseBody, error) {
+	jsonData, _ := json.Marshal(reqBody)
+	resp, err := http.Post("http://192.168.160.6:8000", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	result := &IpAssignmentResponseBody{}
+	err = json.Unmarshal(respBody, result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

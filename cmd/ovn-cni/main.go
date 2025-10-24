@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -64,22 +65,36 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if len(hostIf) > 15 {
 		hostIf = hostIf[:15]
 	}
-	// 2. Create veth pair
+	// 2. Request MAC and IP address from IPAM.
 
-	hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
+	reqBody := net_utils.IpAssignmentRequestBody{
+		Namespace:          string(k8sArgs.K8S_POD_NAMESPACE),
+		Name:               string(k8sArgs.K8S_POD_NAME),
+		ContainerInterface: "eth0",
+		IpFamily:           "IPv4",
+	}
+	ipamResponse, err := net_utils.RequestAssignmentFromIPAM(reqBody)
+	if err != nil {
+		log.Printf("error from ipam %v", err)
+		return err
+	}
+
+	// 3. Create veth pair
+
+	hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns, ipamResponse.MacAddress)
 	if err != nil {
 		log.Printf("Error creating veth pair: %v", err)
 		// return err
 	}
 
-	// 3. Add port to ovs
+	// 4. Add port to ovs
 	err = oclient.AddPort("br-int", hostIf, "system", *hostMAC)
 	if err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		// return err
 	}
 
-	// 4. Add port to ovn logical switch
+	// 5. Add port to ovn logical switch
 	log.Printf("mac address %s", *hostMAC)
 	err = ovnClient.CreateLogicalPort("public", hostIf, *containerMac)
 	if err != nil {
@@ -88,11 +103,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// ✅ Build minimal CNI result
-	result := &types100.Result{
+	_, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/32")
 
+	result := &types100.Result{
+		IPs: []*types100.IPConfig{
+			{
+				Interface: types100.Int(0),
+				Address:   *ipNet,
+			},
+		},
 		CNIVersion: version.Current(),
 		Interfaces: []*types100.Interface{
 			{
+				Mtu:     1500,
 				Name:    args.IfName,
 				Mac:     *hostMAC,
 				Sandbox: args.Netns,
