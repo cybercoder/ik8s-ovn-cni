@@ -69,7 +69,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	reqBody := net_utils.IpAssignmentRequestBody{
 		Namespace:          string(k8sArgs.K8S_POD_NAMESPACE),
-		Name:               string(k8sArgs.K8S_POD_NAME),
+		Name:               vmName,
 		ContainerInterface: "eth0",
 		IpFamily:           "IPv4",
 	}
@@ -104,7 +104,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// ✅ Build minimal CNI result
 	_, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/32")
-
+	log.Printf("IpamRespond Address: %s, %s", ipamResponse.Address, ipNet.String())
 	result := &types100.Result{
 		IPs: []*types100.IPConfig{
 			{
