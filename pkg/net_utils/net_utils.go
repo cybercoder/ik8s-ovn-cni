@@ -106,7 +106,7 @@ func WaitForNetns(netnsPath string, timeout time.Duration) error {
 
 func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentResponseBody, error) {
 	jsonData, _ := json.Marshal(reqBody)
-	resp, err := http.Post("http://192.168.160.6:8000", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post("http://192.168.35.20:8000/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
