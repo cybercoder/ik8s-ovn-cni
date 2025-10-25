@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -17,7 +18,7 @@ import (
 
 // CreateStableVeth creates a veth pair, keeps host side in current namespace
 // and moves peer side to the target netns (container).
-func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *string, error) {
+func CreateStableVeth(hostIf, ifName, netnsPath, macAddress, ipAddress string) (*string, *string, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -41,9 +42,8 @@ func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *s
 	}()
 
 	veth := &netlink.Veth{
-		LinkAttrs:        netlink.LinkAttrs{Name: hostIf, MTU: 1500},
-		PeerHardwareAddr: []byte(macAddress),
-		PeerName:         peerIf,
+		LinkAttrs: netlink.LinkAttrs{Name: hostIf, MTU: 1500},
+		PeerName:  peerIf,
 	}
 	if err := netlink.LinkAdd(veth); err != nil {
 		return nil, nil, fmt.Errorf("failed to create veth pair: %w", err)
@@ -77,6 +77,37 @@ func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *s
 
 	if err := netlink.LinkSetName(peerLink, ifName); err != nil {
 		return nil, nil, fmt.Errorf("failed to rename peer: %w", err)
+	}
+
+	if ipAddress != "" {
+		ip, ipNet, err := net.ParseCIDR(ipAddress)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse IP address %s: %v", ipAddress, err)
+		}
+		peerLink, err = netlink.LinkByName(ifName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to find renamed peer in container ns: %w", err)
+		}
+		if err := netlink.AddrAdd(peerLink, &netlink.Addr{
+			IPNet: &net.IPNet{
+				IP:   ip,
+				Mask: ipNet.Mask,
+			},
+		}); err != nil {
+			return nil, nil, fmt.Errorf("failed to add IP address %s to interface %s: %w", ipAddress, ifName, err)
+		}
+		log.Printf("✅ Assigned IP address: %s to interface %s", ipAddress, ifName)
+	}
+
+	if macAddress != "" {
+		hwAddr, err := net.ParseMAC(macAddress)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse MAC address %s: %w", macAddress, err)
+		}
+		if err := netlink.LinkSetHardwareAddr(peerLink, hwAddr); err != nil {
+			return nil, nil, fmt.Errorf("failed to set MAC address %s: %w", macAddress, err)
+		}
+		log.Printf("✅ Set custom MAC address: %s on interface %s", macAddress, peerIf)
 	}
 
 	if err := netlink.LinkSetUp(peerLink); err != nil {
