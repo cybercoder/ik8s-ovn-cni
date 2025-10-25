@@ -41,8 +41,9 @@ func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *s
 	}()
 
 	veth := &netlink.Veth{
-		LinkAttrs: netlink.LinkAttrs{Name: hostIf, MTU: 1500},
-		PeerName:  peerIf,
+		LinkAttrs:        netlink.LinkAttrs{Name: hostIf, MTU: 1500},
+		PeerHardwareAddr: []byte(macAddress),
+		PeerName:         peerIf,
 	}
 	if err := netlink.LinkAdd(veth); err != nil {
 		return nil, nil, fmt.Errorf("failed to create veth pair: %w", err)
@@ -78,11 +79,6 @@ func CreateStableVeth(hostIf, ifName, netnsPath, macAddress string) (*string, *s
 		return nil, nil, fmt.Errorf("failed to rename peer: %w", err)
 	}
 
-	if macAddress != "" {
-		if err := netlink.LinkSetHardwareAddr(peerLink, []byte(macAddress)); err != nil {
-			return nil, nil, fmt.Errorf("failed to set mac address for peer link: %w", err)
-		}
-	}
 	if err := netlink.LinkSetUp(peerLink); err != nil {
 		return nil, nil, fmt.Errorf("failed to bring up peer: %w", err)
 	}
@@ -106,7 +102,7 @@ func WaitForNetns(netnsPath string, timeout time.Duration) error {
 
 func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentResponseBody, error) {
 	jsonData, _ := json.Marshal(reqBody)
-	resp, err := http.Post("http://192.168.35.20:8000/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post("http://172.16.35.20:8000/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
