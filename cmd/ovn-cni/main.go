@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -55,31 +56,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
-	hostIf := fmt.Sprintf("veth-%s", vmName)
+	hostIf := fmt.Sprintf("tap-%s", vmName)
 	if len(hostIf) > 15 {
 		hostIf = hostIf[:15]
 	}
-	// 2. Create veth pair
 
-	// hostMAC, containerMac, err := net_utils.CreateStableVeth(hostIf, args.IfName, args.Netns)
-	// if err != nil {
-	// 	log.Printf("Error creating veth pair: %v", err)
-	// 	// return err
-	// }
-
-	// // 3. Add port to ovs
-	// err = oclient.AddPort("br-int", hostIf, "system", *hostMAC)
-	// if err != nil {
-	// 	log.Printf("Error adding port to ovs: %v", err)
-	// 	// return err
-	// }
-	// realmac, _ := net_utils.GenerateMAC(hostIf)
 	err = oclient.AddManagedTapPort("br-int", hostIf)
 	if err != nil {
 		log.Printf("Error on Add managed tap port to br-int: %v", err)
 	}
-	// realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
-	realmac, err := net_utils.GetInterfaceMAC(hostIf)
+	realmac, err := oclient.WaitForPortMAC(hostIf, 30*time.Second)
 	if err != nil {
 		log.Printf("Error on getting mac address for %s: %v", hostIf, err)
 	}

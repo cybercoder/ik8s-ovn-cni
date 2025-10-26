@@ -26,7 +26,7 @@ func (c *Client) AddManagedTapPort(bridgeName, portName string) error {
 	iface := &ovsModel.Interface{
 		UUID: ifaceUUID.String(),
 		Name: portName,
-		Type: "tap",
+		Type: "managedtap",
 		ExternalIDs: map[string]string{
 			"iface-id": portName,
 			// optional flag: mark as managed for ovn-controller visibility
@@ -141,18 +141,6 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType, hostmac string) error 
 //        if err := c.ovsClient.Get(ctx, br); err != nil {
 //                return fmt.Errorf("failed to get bridge %q: %v", bridgeName, err)
 //        }
-
-func (c *Client) SetInterfaceExternalIDs(ifName string, ids map[string]string) error {
-	row := map[string]any{"external_ids": ids}
-	op := ovsdb.Operation{
-		Op:    "update",
-		Table: "Interface",
-		Where: []ovsdb.Condition{{Column: "name", Function: ovsdb.ConditionEqual, Value: ifName}},
-		Row:   row,
-	}
-	_, err := c.ovsClient.Transact(context.Background(), []ovsdb.Operation{op}...)
-	return err
-}
 
 func (c *Client) GetPortMAC(portName string) (string, error) {
 	ctx := context.Background()
