@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -74,7 +75,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		Interfaces: []*types100.Interface{
 			{
 				Mtu:     1500,
-				Name:    args.IfName,
+				Name:    "eth0",
 				Mac:     veths[0].Attrs().HardwareAddr.String(),
 				Sandbox: args.Netns,
 			},
@@ -94,10 +95,11 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-func cmdCheck(args *skel.CmdArgs) error {
-	return nil
-}
-
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, "ovn-cni")
+	funcs := skel.CNIFuncs{
+		Add: cmdAdd,
+		Del: cmdDel,
+	}
+	runtime.LockOSThread()
+	skel.PluginMainFuncs(funcs, version.All, "ovn-cni")
 }

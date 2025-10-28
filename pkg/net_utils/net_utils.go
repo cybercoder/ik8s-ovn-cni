@@ -83,9 +83,9 @@ func PrepareLink(netnsPath string, ifIndex int, finalIfName string, ipamResponse
 	}); err != nil {
 		return err
 	}
-	if err := netlink.LinkSetName(veths[ifIndex], finalIfName); err != nil {
-		return err
-	}
+	// if err := netlink.LinkSetName(veths[ifIndex], finalIfName); err != nil {
+	// 	return err
+	// }
 	if err := netlink.LinkSetUp(veths[ifIndex]); err != nil {
 		return err
 	}
