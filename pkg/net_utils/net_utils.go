@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/samber/lo"
 	"github.com/vishvananda/netlink"
@@ -43,7 +42,7 @@ func GetVethList(netnsPath string) ([]netlink.Link, error) {
 
 func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentResponseBody, error) {
 	jsonData, _ := json.Marshal(reqBody)
-	resp, err := http.Post(os.Getenv("IPAM_URI")+"/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post("http://172.16.35.17:8000/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
