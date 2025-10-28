@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 
@@ -14,6 +15,16 @@ import (
 )
 
 func GetVethList(netnsPath string) ([]netlink.Link, error) {
+	origNS, err := netns.Get()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current netns: %w", err)
+	}
+	defer origNS.Close()
+	defer func() {
+		if err := netns.Set(origNS); err != nil {
+			log.Printf("failed to restore netns: %v", err)
+		}
+	}()
 	ns, err := netns.GetFromPath(netnsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enter target netns: %v", err)
@@ -64,6 +75,16 @@ func PrepareLink(netnsPath string, ifIndex int, finalIfName string, ipamResponse
 	if err != nil {
 		return err
 	}
+	origNS, err := netns.Get()
+	if err != nil {
+		return fmt.Errorf("failed to get current netns: %w", err)
+	}
+	defer origNS.Close()
+	defer func() {
+		if err := netns.Set(origNS); err != nil {
+			log.Printf("failed to restore netns: %v", err)
+		}
+	}()
 	ns, err := netns.GetFromPath(netnsPath)
 	if err != nil {
 		return fmt.Errorf("failed to enter target netns: %v", err)
