@@ -48,7 +48,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
-
+	_, netMask, _ := net.ParseCIDR("172.16.22.0/24")
 	veths, err := net_utils.GetVethList(args.Netns)
 	if err != nil {
 		log.Printf("%v", err)
@@ -68,7 +68,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err := net_utils.PrepareLink(args.Netns, 0, args.IfName, *ipamResponse); err != nil {
 		log.Printf("%v", err)
 	}
-	_, ipNet, _ := net.ParseCIDR(ipamResponse.Address + "/32")
+
 	result := &types100.Result{
 
 		CNIVersion: version.Current(),
@@ -83,7 +83,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		IPs: []*types100.IPConfig{
 			{
 				Interface: types100.Int(0),
-				Address:   *ipNet,
+				Address:   net.IPNet{IP: net.ParseIP(ipamResponse.Address).To4(), Mask: net.IPMask(netMask.Mask.String())},
 			},
 		},
 	}
