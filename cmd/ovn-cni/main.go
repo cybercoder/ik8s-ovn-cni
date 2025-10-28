@@ -18,17 +18,6 @@ import (
 )
 
 func cmdAdd(args *skel.CmdArgs) error {
-
-	f, err := os.OpenFile("/var/log/ik8s-ovn-cni", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	defer f.Close()
-
-	log.SetOutput(f)
-	os.Stdout = f
-	os.Stderr = f
-
 	log.Printf("ifName: %s", args.IfName)
 
 	k8sArgs := cniTypes.CniKubeArgs{}
@@ -67,6 +56,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	log.Printf("ipamResponse IP: %s", ipamResponse.Address)
 	if err := net_utils.PrepareLink(args.Netns, 0, args.IfName, *ipamResponse); err != nil {
 		log.Printf("%v", err)
 		return err
@@ -86,7 +76,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		IPs: []*types100.IPConfig{
 			{
 				Interface: types100.Int(0),
-				Address:   net.IPNet{IP: net.ParseIP(ipamResponse.Address).To4(), Mask: net.IPMask(netMask.Mask.String())},
+				Address:   net.IPNet{IP: net.ParseIP(ipamResponse.Address), Mask: net.IPMask(netMask.Mask)},
 			},
 		},
 	}
@@ -99,6 +89,16 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
+	f, err := os.OpenFile("/var/log/ik8s-ovn-cni", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
+	os.Stdout = f
+	os.Stderr = f
+
 	funcs := skel.CNIFuncs{
 		Add: cmdAdd,
 		Del: cmdDel,
