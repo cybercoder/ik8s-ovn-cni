@@ -13,7 +13,6 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
-	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -65,26 +64,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	log.Printf("veth 0: %s", veths[0].Attrs().HardwareAddr.String())
-
-	if err := netlink.LinkSetHardwareAddr(veths[0], net.HardwareAddr(ipamResponse.MacAddress)); err != nil {
+	if err := net_utils.PrepareLink(args.Netns, 0, args.IfName, *ipamResponse); err != nil {
 		log.Printf("%v", err)
 	}
-	ip, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/32")
-	if err := netlink.AddrAdd(veths[0], &netlink.Addr{
-		IPNet: &net.IPNet{
-			IP:   ip,
-			Mask: ipNet.Mask,
-		},
-	}); err != nil {
-		log.Printf("%v", err)
-	}
-	if err := netlink.LinkSetName(veths[0], args.IfName); err != nil {
-		log.Printf("%v", err)
-	}
-	if err := netlink.LinkSetUp(veths[0]); err != nil {
-		log.Printf("%v", err)
-	}
+	_, ipNet, _ := net.ParseCIDR(ipamResponse.Address + "/32")
 	result := &types100.Result{
 
 		CNIVersion: version.Current(),

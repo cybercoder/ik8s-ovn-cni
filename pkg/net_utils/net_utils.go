@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 
@@ -55,4 +56,39 @@ func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentRe
 		return nil, err
 	}
 	return result, nil
+}
+
+func PrepareLink(netnsPath string, ifIndex int, finalIfName string, ipamResponse IpAssignmentResponseBody) error {
+	veths, err := GetVethList(netnsPath)
+	if err != nil {
+		return err
+	}
+	ns, err := netns.GetFromPath(netnsPath)
+	if err != nil {
+		return fmt.Errorf("failed to enter target netns: %v", err)
+	}
+	defer ns.Close()
+
+	if err := netns.Set(ns); err != nil {
+		return fmt.Errorf("failed to enter target netns: %v", err)
+	}
+	if err := netlink.LinkSetHardwareAddr(veths[ifIndex], net.HardwareAddr(ipamResponse.MacAddress)); err != nil {
+		return err
+	}
+	ip, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/32")
+	if err := netlink.AddrAdd(veths[ifIndex], &netlink.Addr{
+		IPNet: &net.IPNet{
+			IP:   ip,
+			Mask: ipNet.Mask,
+		},
+	}); err != nil {
+		return err
+	}
+	if err := netlink.LinkSetName(veths[ifIndex], finalIfName); err != nil {
+		return err
+	}
+	if err := netlink.LinkSetUp(veths[ifIndex]); err != nil {
+		return err
+	}
+	return nil
 }
