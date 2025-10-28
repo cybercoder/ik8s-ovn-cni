@@ -47,8 +47,10 @@ func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentRe
 		return nil, err
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
-
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	result := &IpAssignmentResponseBody{}
 	err = json.Unmarshal(respBody, result)
 	if err != nil {
@@ -74,7 +76,7 @@ func PrepareLink(netnsPath string, ifIndex int, finalIfName string, ipamResponse
 	if err := netlink.LinkSetHardwareAddr(veths[ifIndex], net.HardwareAddr(ipamResponse.MacAddress)); err != nil {
 		return err
 	}
-	ip, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/32")
+	ip, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/24")
 	if err := netlink.AddrAdd(veths[ifIndex], &netlink.Addr{
 		IPNet: &net.IPNet{
 			IP:   ip,

@@ -26,6 +26,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer f.Close()
 
 	log.SetOutput(f)
+	os.Stdout = f
+	os.Stderr = f
 
 	log.Printf("ifName: %s", args.IfName)
 
@@ -67,6 +69,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	if err := net_utils.PrepareLink(args.Netns, 0, args.IfName, *ipamResponse); err != nil {
 		log.Printf("%v", err)
+		return err
 	}
 
 	result := &types100.Result{
