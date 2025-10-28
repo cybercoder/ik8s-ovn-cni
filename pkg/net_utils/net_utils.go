@@ -1,7 +1,12 @@
 package net_utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 
 	"github.com/samber/lo"
 	"github.com/vishvananda/netlink"
@@ -31,5 +36,23 @@ func GetVethList(netnsPath string) ([]netlink.Link, error) {
 	if len(veths) == 0 {
 		return nil, fmt.Errorf("no tap link in ns %s: %v", ns.String(), err)
 	}
+
 	return veths, nil
+}
+
+func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentResponseBody, error) {
+	jsonData, _ := json.Marshal(reqBody)
+	resp, err := http.Post(os.Getenv("IPAM_URI")+"/apis/ovn.ik8s.ir/v1alpha1/assignip", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	result := &IpAssignmentResponseBody{}
+	err = json.Unmarshal(respBody, result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
