@@ -14,12 +14,21 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovnnb"
+	"github.com/cybercoder/ik8s-ovn-cni/pkg/ovs"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func cmdAdd(args *skel.CmdArgs) error {
 	log.Printf("ifName: %s", args.IfName)
-
+	oclient, err := ovs.CreateOVSclient()
+	if err != nil {
+		return err
+	}
+	ovnClient, err := ovnnb.CreateOvnNbClient("tcp:192.168.12.177:6641")
+	if err != nil {
+		return err
+	}
 	k8sArgs := cniTypes.CniKubeArgs{}
 	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
 		log.Printf("error loading args: %v", err)
@@ -39,7 +48,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
-	_, netMask, _ := net.ParseCIDR("172.16.22.0/24")
 
 	reqBody := net_utils.IpAssignmentRequestBody{
 		Namespace:          string(k8sArgs.K8S_POD_NAMESPACE),
@@ -53,11 +61,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := net_utils.PrepareLink(string(k8sArgs.K8S_POD_NAMESPACE), vmName, args.Netns, args.IfName, ipamResponse.Address, ipamResponse.MacAddress); err != nil {
+	_, netMask, _ := net.ParseCIDR(ipamResponse.Address + "/32")
+
+	hostIf := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+	hostMAC, err := net_utils.PrepareLink(hostIf, args.Netns, args.IfName, ipamResponse.Address+"/32", ipamResponse.MacAddress)
+	if err != nil {
 		log.Printf("%v", err)
 		return err
 	}
-
+	if err := oclient.AddPort("br-int", hostIf, "system", *hostMAC); err != nil {
+		log.Printf("Error adding port to ovs: %v", err)
+		return err
+	}
+	if err := ovnClient.CreateLogicalPort("public", hostIf, ipamResponse.MacAddress); err != nil {
+		log.Printf("Error creating logical port on logical switch public: %v", err)
+		return err
+	}
 	result := &types100.Result{
 
 		CNIVersion: version.Current(),

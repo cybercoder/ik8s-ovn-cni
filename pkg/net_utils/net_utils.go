@@ -73,16 +73,16 @@ func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentRe
 	return result, nil
 }
 
-func PrepareLink(namespace, name, netnsPath, ifName, ipAddress, macAddress string) error {
+func PrepareLink(generatedName, netnsPath, ifName, ipAddress, macAddress string) (*string, error) {
 	origNS, _ := netns.Get()
 	defer netns.Set(origNS)
-	generatedName := GenerateVethIfName(name, namespace, ifName)
+
 	hostIfName := "v-" + generatedName
 	peerTempName := "t-" + generatedName
 
 	targetNS, err := netns.GetFromPath(netnsPath)
 	if err != nil {
-		return fmt.Errorf("failed to get target netns: %v", err)
+		return nil, fmt.Errorf("failed to get target netns: %v", err)
 	}
 	defer targetNS.Close()
 
@@ -94,33 +94,33 @@ func PrepareLink(namespace, name, netnsPath, ifName, ipAddress, macAddress strin
 		PeerName: peerTempName,
 	}
 	if err := netlink.LinkAdd(veth); err != nil {
-		return fmt.Errorf("failed to create veth interface: %v", err)
+		return nil, fmt.Errorf("failed to create veth interface: %v", err)
 	}
 
 	peer, err := netlink.LinkByName(peerTempName)
 	if err != nil {
-		return fmt.Errorf("failed to get peer veth: %v", err)
+		return nil, fmt.Errorf("failed to get peer veth: %v", err)
 	}
 
 	if err := netlink.LinkSetNsFd(peer, int(targetNS)); err != nil {
-		return fmt.Errorf("failed to move peer veth to target ns: %v", err)
+		return nil, fmt.Errorf("failed to move peer veth to target ns: %v", err)
 	}
 
 	err = netns.Set(targetNS)
 	if err != nil {
-		return fmt.Errorf("failed to enter target netns: %v", err)
+		return nil, fmt.Errorf("failed to enter target netns: %v", err)
 	}
 	defer netns.Set(netns.None())
 
 	peer, _ = netlink.LinkByName(peerTempName)
 	hw, _ := net.ParseMAC(macAddress)
 	if err := netlink.LinkSetHardwareAddr(peer, hw); err != nil {
-		return fmt.Errorf("failed to set MAC: %v", err)
+		return nil, fmt.Errorf("failed to set MAC: %v", err)
 	}
 
-	ip, ipNet, err := net.ParseCIDR(ipAddress + "/24")
+	ip, ipNet, err := net.ParseCIDR(ipAddress)
 	if err != nil {
-		return fmt.Errorf("invalid IP: %v", err)
+		return nil, fmt.Errorf("invalid IP: %v", err)
 	}
 	if err := netlink.AddrAdd(peer, &netlink.Addr{
 		IPNet: &net.IPNet{
@@ -128,21 +128,26 @@ func PrepareLink(namespace, name, netnsPath, ifName, ipAddress, macAddress strin
 			Mask: ipNet.Mask,
 		},
 	}); err != nil {
-		return fmt.Errorf("failed to set ip address for veth interface: %v", err)
+		return nil, fmt.Errorf("failed to set ip address for veth interface: %v", err)
 	}
 
 	if err := netlink.LinkSetName(peer, ifName); err != nil {
-		return fmt.Errorf("failed to set veth peer interface name: %v", err)
+		return nil, fmt.Errorf("failed to set veth peer interface name: %v", err)
 	}
 	if err := netlink.LinkSetUp(peer); err != nil {
-		return fmt.Errorf("failed to set veth peer interface up: %v", err)
+		return nil, fmt.Errorf("failed to set veth peer interface up: %v", err)
 	}
 
 	netns.Set(origNS)
 	if err := netlink.LinkSetUp(veth); err != nil {
-		return fmt.Errorf("failed to set veth interface up: %v", err)
+		return nil, fmt.Errorf("failed to set veth interface up: %v", err)
 	}
-	return nil
+	hostLink, err := netlink.LinkByName(hostIfName)
+	if err != nil {
+		return nil, fmt.Errorf("host link lookup failed: %w", err)
+	}
+	hostMAC := hostLink.Attrs().HardwareAddr.String()
+	return &hostMAC, nil
 }
 
 func GenerateVethIfName(name, namespace, ifName string) string {
