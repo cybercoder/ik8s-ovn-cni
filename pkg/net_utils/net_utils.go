@@ -130,7 +130,14 @@ func PrepareLink(generatedName, netnsPath, ifName, ipAddress, macAddress string)
 	}); err != nil {
 		return nil, fmt.Errorf("failed to set ip address for veth interface: %v", err)
 	}
-
+	netlink.RouteAdd(&netlink.Route{
+		Dst: &net.IPNet{
+			IP:   net.ParseIP("192.168.12.1"),
+			Mask: net.CIDRMask(32, 32), // /32 mask for single host
+		},
+		LinkIndex: peer.Attrs().Index,
+		Scope:     253,
+	})
 	if err := netlink.LinkSetName(peer, ifName); err != nil {
 		return nil, fmt.Errorf("failed to set veth peer interface name: %v", err)
 	}
