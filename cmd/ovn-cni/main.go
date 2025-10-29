@@ -14,7 +14,6 @@ import (
 	cniTypes "github.com/cybercoder/ik8s-ovn-cni/pkg/cni/types"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/k8s"
 	"github.com/cybercoder/ik8s-ovn-cni/pkg/net_utils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -40,14 +39,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
 	_, netMask, _ := net.ParseCIDR("172.16.22.0/24")
-	veths, err := net_utils.GetVethList(args.Netns)
-	if err != nil {
-		log.Printf("%v", err)
-	}
+
 	reqBody := net_utils.IpAssignmentRequestBody{
 		Namespace:          string(k8sArgs.K8S_POD_NAMESPACE),
 		Name:               vmName,
-		ContainerInterface: veths[0].Attrs().Name,
+		ContainerInterface: args.IfName,
 		IpFamily:           "IPv4",
 	}
 	ipamResponse, err := net_utils.RequestAssignmentFromIPAM(reqBody)
@@ -56,8 +52,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	log.Printf("ipamResponse IP: %s", ipamResponse.Address)
-	if err := net_utils.PrepareLink(args.Netns, 0, args.IfName, *ipamResponse); err != nil {
+	if err := net_utils.PrepareLink(string(k8sArgs.K8S_POD_NAMESPACE), vmName, args.Netns, args.IfName, ipamResponse.Address, ipamResponse.MacAddress); err != nil {
 		log.Printf("%v", err)
 		return err
 	}
@@ -68,8 +63,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		Interfaces: []*types100.Interface{
 			{
 				Mtu:     1500,
-				Name:    "eth0",
-				Mac:     veths[0].Attrs().HardwareAddr.String(),
+				Name:    args.IfName,
+				Mac:     ipamResponse.MacAddress,
 				Sandbox: args.Netns,
 			},
 		},
@@ -89,6 +84,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func main() {
+	runtime.LockOSThread()
 	f, err := os.OpenFile("/var/log/ik8s-ovn-cni", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
@@ -103,6 +99,5 @@ func main() {
 		Add: cmdAdd,
 		Del: cmdDel,
 	}
-	runtime.LockOSThread()
 	skel.PluginMainFuncs(funcs, version.All, "ovn-cni")
 }
