@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	ovsModel "github.com/cybercoder/ik8s-ovn-cni/pkg/ovs/models"
 	"github.com/google/uuid"
@@ -12,68 +11,63 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 )
 
-func (c *Client) AddManagedTapPort(bridgeName, portName string) error {
+func (c *Client) DelPort(bridgeName, portName string) error {
 	ctx := context.Background()
 
-	ifaceUUID := uuid.New()
-	portUUID := uuid.New()
+	// 1. Get port and bridge objects
+	port := &ovsModel.Port{Name: portName}
+	if err := c.ovsClient.Get(ctx, port); err != nil {
+		return fmt.Errorf("failed to find port %s: %v", portName, err)
+	}
 
 	bridge := &ovsModel.Bridge{Name: bridgeName}
 	if err := c.ovsClient.Get(ctx, bridge); err != nil {
-		return fmt.Errorf("failed to get bridge %q: %v", bridgeName, err)
+		return fmt.Errorf("failed to find bridge %s: %v", bridgeName, err)
 	}
 
-	iface := &ovsModel.Interface{
-		UUID: ifaceUUID.String(),
-		Name: portName,
-		Type: "managedtap",
-		ExternalIDs: map[string]string{
-			"iface-id": portName,
-			// optional flag: mark as managed for ovn-controller visibility
-			"ovn-installed": "true",
+	// 2. Mutate the bridge to remove the port UUID from its Ports set
+	mutations := []model.Mutation{
+		{
+			Field:   &bridge.Ports,
+			Mutator: ovsdb.MutateOperationDelete,
+			Value:   []string{port.UUID},
 		},
 	}
-
-	port := &ovsModel.Port{
-		UUID:       portUUID.String(),
-		Name:       portName,
-		Interfaces: []string{iface.UUID},
-	}
-
-	ifaceOps, err := c.ovsClient.Create(iface)
-	if err != nil {
-		return fmt.Errorf("failed to create interface: %v", err)
-	}
-
-	portOps, err := c.ovsClient.Create(port)
-	if err != nil {
-		return fmt.Errorf("failed to create port: %v", err)
-	}
-
-	mutations := []model.Mutation{{
-		Field:   &bridge.Ports,
-		Mutator: ovsdb.MutateOperationInsert,
-		Value:   []string{port.UUID},
-	}}
-
 	mutateOps, err := c.ovsClient.Where(bridge).Mutate(bridge, mutations...)
 	if err != nil {
 		return fmt.Errorf("failed to prepare bridge mutation: %v", err)
 	}
 
-	ops := append(ifaceOps, append(portOps, mutateOps...)...)
+	// 3. Delete the port itself (and the interface)
+	portOp, err := c.ovsClient.Where(port).Delete()
+	if err != nil {
+		return fmt.Errorf("failed to prepare port delete: %v", err)
+	}
+
+	// 4. Also delete the Interface row(s) belonging to the port
+	for _, ifaceUUID := range port.Interfaces {
+		iface := &ovsModel.Interface{UUID: ifaceUUID}
+		ifaceOp, err := c.ovsClient.Where(iface).Delete()
+		if err != nil {
+			return fmt.Errorf("failed to prepare interface delete: %v", err)
+		}
+		portOp = append(portOp, ifaceOp...)
+	}
+
+	// 5. Run all operations in one transaction
+	ops := append(mutateOps, portOp...)
 	reply, err := c.ovsClient.Transact(ctx, ops...)
 	if err != nil {
-		return fmt.Errorf("OVSDB transaction failed: %v", err)
+		return fmt.Errorf("transaction failed: %v", err)
 	}
 
 	for i, r := range reply {
 		if r.Error != "" {
-			log.Printf("OVSDB error %d: %s (%s)", i, r.Error, r.Details)
+			log.Printf("OVSDB error: %d %s (%s)", i, r.Error, r.Details)
 		}
 	}
 
-	log.Printf("✅ Created managed_tap port %q on bridge %s.", portName, bridgeName)
+	log.Printf("🧹 Deleted port %s from bridge %s", portName, bridgeName)
 	return nil
 }
 
@@ -142,32 +136,14 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType, hostmac string) error 
 //                return fmt.Errorf("failed to get bridge %q: %v", bridgeName, err)
 //        }
 
-func (c *Client) GetPortMAC(portName string) (string, error) {
-	ctx := context.Background()
-	iface := &ovsModel.Interface{Name: portName}
-	if err := c.ovsClient.Get(ctx, iface); err != nil {
-		return "", fmt.Errorf("failed to get interface %q: %w", portName, err)
+func (c *Client) SetInterfaceExternalIDs(ifName string, ids map[string]string) error {
+	row := map[string]any{"external_ids": ids}
+	op := ovsdb.Operation{
+		Op:    "update",
+		Table: "Interface",
+		Where: []ovsdb.Condition{{Column: "name", Function: ovsdb.ConditionEqual, Value: ifName}},
+		Row:   row,
 	}
-	if iface.MACInUse == nil {
-		return "", fmt.Errorf("no mac_in_use found")
-	}
-	return *iface.MACInUse, nil
-}
-
-func (c *Client) WaitForPortMAC(portName string, timeout time.Duration) (string, error) {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	deadline := time.Now().Add(timeout)
-
-	for range ticker.C {
-		mac, err := c.GetPortMAC(portName)
-		if err == nil && mac != "" {
-			return mac, nil
-		}
-		if time.Now().After(deadline) {
-			return "", fmt.Errorf("timeout waiting for port %s MAC", portName)
-		}
-	}
-	return "", fmt.Errorf("unexpected exit waiting for port %s MAC", portName)
+	_, err := c.ovsClient.Transact(context.Background(), []ovsdb.Operation{op}...)
+	return err
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -63,7 +64,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	_, netMask, _ := net.ParseCIDR(ipamResponse.Address + "/32")
 
-	hostIf := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+	hostIf := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
 	hostMAC, err := net_utils.PrepareLink(hostIf, args.Netns, args.IfName, ipamResponse.Address+"/32", ipamResponse.MacAddress)
 	if err != nil {
 		log.Printf("%v", err)
@@ -100,6 +101,51 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	ovnClient, err := ovnnb.CreateOvnNbClient("tcp:192.168.12.177:6641")
+	if err != nil {
+		log.Printf("error on creating ovn client: %v", err)
+		return err
+	}
+	ovsClient, err := ovs.CreateOVSclient()
+	if err != nil {
+		log.Printf("error on creating ovs client: %v", err)
+		return err
+	}
+
+	k8sArgs := cniTypes.CniKubeArgs{}
+	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
+		log.Printf("error loading args: %v", err)
+		return err
+	}
+	// 1. find kubevirt vm name using kube api
+	k8sClient, err := k8s.CreateClient()
+	if err != nil {
+		log.Printf("Error creating Kubernetes Client: %v", err)
+		return err
+	}
+	pod, err := k8sClient.CoreV1().Pods(string(k8sArgs.K8S_POD_NAMESPACE)).Get(context.Background(), string(k8sArgs.K8S_POD_NAME), metav1.GetOptions{})
+	if err != nil {
+		log.Printf("Error getting pod: %v", err)
+		return err
+	}
+	labels := pod.GetLabels()
+	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
+	vmName := labels["vm.kubevirt.io/name"]
+	hostIf := fmt.Sprintf("veth-%s", vmName)
+	if len(hostIf) > 15 {
+		hostIf = hostIf[:15]
+	}
+	err = ovnClient.DeleteLogicalPort("public", hostIf)
+	if err != nil {
+		log.Printf("Error on deleting logical switch port %s: %v", hostIf, err)
+		return err
+	}
+	err = ovsClient.DelPort("br-int", hostIf)
+	if err != nil {
+		log.Printf("Error on deleting port %s from ovs: %v", hostIf, err)
+		return err
+	}
+
 	return nil
 }
 
@@ -113,7 +159,7 @@ func main() {
 
 	log.SetOutput(f)
 	os.Stdout = f
-	os.Stderr = f
+	//os.Stderr = f
 
 	funcs := skel.CNIFuncs{
 		Add: cmdAdd,
