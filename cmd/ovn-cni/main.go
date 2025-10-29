@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -74,7 +73,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error adding port to ovs: %v", err)
 		return err
 	}
-	if err := ovnClient.CreateLogicalPort("public", hostIf, ipamResponse.MacAddress); err != nil {
+	if err := ovnClient.CreateLogicalPort("public", hostIf, *hostMAC); err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		return err
 	}
@@ -131,10 +130,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
 	vmName := labels["vm.kubevirt.io/name"]
-	hostIf := fmt.Sprintf("veth-%s", vmName)
-	if len(hostIf) > 15 {
-		hostIf = hostIf[:15]
-	}
+	hostIf := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
 	err = ovnClient.DeleteLogicalPort("public", hostIf)
 	if err != nil {
 		log.Printf("Error on deleting logical switch port %s: %v", hostIf, err)
