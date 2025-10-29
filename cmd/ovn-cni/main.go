@@ -63,8 +63,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	_, netMask, _ := net.ParseCIDR(ipamResponse.Address + "/32")
 
-	hostIf := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
-	hostMAC, err := net_utils.PrepareLink(hostIf, args.Netns, args.IfName, ipamResponse.Address+"/32", ipamResponse.MacAddress)
+	generatedName := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+	hostIf := "v-" + generatedName
+	hostMAC, err := net_utils.PrepareLink(generatedName, args.Netns, args.IfName, ipamResponse.Address+"/32", ipamResponse.MacAddress)
 	if err != nil {
 		log.Printf("%v", err)
 		return err
