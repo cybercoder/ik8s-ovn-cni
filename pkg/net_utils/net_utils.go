@@ -74,35 +74,73 @@ func RequestAssignmentFromIPAM(reqBody IpAssignmentRequestBody) (*IpAssignmentRe
 }
 
 func PrepareLink(namespace, name, netnsPath, ifName, ipAddress, macAddress string) error {
-	ns, err := netns.GetFromPath(netnsPath)
+	origNS, _ := netns.Get()
+	defer netns.Set(origNS)
+	generatedName := GenerateVethIfName(name, namespace, ifName)
+	hostIfName := "v-" + generatedName
+	peerTempName := "t-" + generatedName
+
+	targetNS, err := netns.GetFromPath(netnsPath)
 	if err != nil {
 		return fmt.Errorf("failed to get target netns: %v", err)
 	}
-	defer ns.Close()
+	defer targetNS.Close()
 
 	veth := &netlink.Veth{
 		LinkAttrs: netlink.LinkAttrs{
-			Name: GenerateVethIfName(name, namespace, ifName),
+			Name: hostIfName,
 			MTU:  1500,
 		},
-		PeerName:         ifName,
-		PeerNamespace:    ns,
-		PeerMTU:          1500,
-		PeerHardwareAddr: net.HardwareAddr(macAddress),
+		PeerName: peerTempName,
+	}
+	if err := netlink.LinkAdd(veth); err != nil {
+		return fmt.Errorf("failed to create veth interface: %v", err)
+	}
+
+	peer, err := netlink.LinkByName(peerTempName)
+	if err != nil {
+		return fmt.Errorf("failed to get peer veth: %v", err)
+	}
+
+	if err := netlink.LinkSetNsFd(peer, int(targetNS)); err != nil {
+		return fmt.Errorf("failed to move peer veth to target ns: %v", err)
+	}
+
+	err = netns.Set(targetNS)
+	if err != nil {
+		return fmt.Errorf("failed to enter target netns: %v", err)
+	}
+	defer netns.Set(netns.None())
+
+	peer, _ = netlink.LinkByName(peerTempName)
+	hw, _ := net.ParseMAC(macAddress)
+	if err := netlink.LinkSetHardwareAddr(peer, hw); err != nil {
+		return fmt.Errorf("failed to set MAC: %v", err)
 	}
 
 	ip, ipNet, err := net.ParseCIDR(ipAddress + "/24")
-	if err := netlink.AddrAdd(veth, &netlink.Addr{
+	if err != nil {
+		return fmt.Errorf("invalid IP: %v", err)
+	}
+	if err := netlink.AddrAdd(peer, &netlink.Addr{
 		IPNet: &net.IPNet{
 			IP:   ip,
 			Mask: ipNet.Mask,
 		},
 	}); err != nil {
-		return fmt.Errorf("failed to ser ip address for veth interface: %v", err)
+		return fmt.Errorf("failed to set ip address for veth interface: %v", err)
 	}
 
+	if err := netlink.LinkSetName(peer, ifName); err != nil {
+		return fmt.Errorf("failed to set veth peer interface name: %v", err)
+	}
+	if err := netlink.LinkSetUp(peer); err != nil {
+		return fmt.Errorf("failed to set veth peer interface up: %v", err)
+	}
+
+	netns.Set(origNS)
 	if err := netlink.LinkSetUp(veth); err != nil {
-		return fmt.Errorf("failed to ser veth interface up: %v", err)
+		return fmt.Errorf("failed to set veth interface up: %v", err)
 	}
 	return nil
 }
