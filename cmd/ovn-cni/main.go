@@ -79,7 +79,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	result := &types100.Result{
-
 		CNIVersion: version.Current(),
 		Interfaces: []*types100.Interface{
 			{
