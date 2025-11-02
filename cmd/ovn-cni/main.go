@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 	"runtime"
 
@@ -61,21 +60,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	_, netMask, _ := net.ParseCIDR(ipamResponse.Address + "/32")
-
-	generatedName := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
-	hostIf := "v-" + generatedName
-	hostMAC, err := net_utils.PrepareLink(generatedName, args.Netns, args.IfName, ipamResponse.Address+"/32", ipamResponse.MacAddress)
-	if err != nil {
-		log.Printf("%v", err)
-		return err
-	}
-	if err := oclient.AddPort("br-int", hostIf, "system", *hostMAC); err != nil {
+	if err := oclient.AddPort("br-int", args.IfName, "internal", ipamResponse.MacAddress); err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		return err
 	}
-	if err := ovnClient.CreateLogicalPort("public", hostIf, *hostMAC); err != nil {
+
+	if err := ovnClient.CreateLogicalPort("public", args.IfName, ipamResponse.MacAddress); err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
+		return err
+	}
+
+	if err := net_utils.MoveIf2NS(args.IfName, args.Netns); err != nil {
+		log.Printf("Error moving ovs generated port to target ns %s : %v", args.Netns, err)
 		return err
 	}
 	result := &types100.Result{
@@ -86,12 +82,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 				Name:    args.IfName,
 				Mac:     ipamResponse.MacAddress,
 				Sandbox: args.Netns,
-			},
-		},
-		IPs: []*types100.IPConfig{
-			{
-				Interface: types100.Int(0),
-				Address:   net.IPNet{IP: net.ParseIP(ipamResponse.Address), Mask: net.IPMask(netMask.Mask)},
 			},
 		},
 	}
@@ -111,34 +101,14 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	k8sArgs := cniTypes.CniKubeArgs{}
-	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
-		log.Printf("error loading args: %v", err)
+	err = ovnClient.DeleteLogicalPort("public", args.IfName)
+	if err != nil {
+		log.Printf("Error on deleting logical switch port %s: %v", args.IfName, err)
 		return err
 	}
-	// 1. find kubevirt vm name using kube api
-	k8sClient, err := k8s.CreateClient()
+	err = ovsClient.DelPort("br-int", args.IfName)
 	if err != nil {
-		log.Printf("Error creating Kubernetes Client: %v", err)
-		return err
-	}
-	pod, err := k8sClient.CoreV1().Pods(string(k8sArgs.K8S_POD_NAMESPACE)).Get(context.Background(), string(k8sArgs.K8S_POD_NAME), metav1.GetOptions{})
-	if err != nil {
-		log.Printf("Error getting pod: %v", err)
-		return err
-	}
-	labels := pod.GetLabels()
-	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
-	vmName := labels["vm.kubevirt.io/name"]
-	hostIf := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
-	err = ovnClient.DeleteLogicalPort("public", hostIf)
-	if err != nil {
-		log.Printf("Error on deleting logical switch port %s: %v", hostIf, err)
-		return err
-	}
-	err = ovsClient.DelPort("br-int", hostIf)
-	if err != nil {
-		log.Printf("Error on deleting port %s from ovs: %v", hostIf, err)
+		log.Printf("Error on deleting port %s from ovs: %v", args.IfName, err)
 		return err
 	}
 
@@ -154,7 +124,7 @@ func main() {
 	defer f.Close()
 
 	log.SetOutput(f)
-	os.Stdout = f
+	// os.Stdout = f
 	//os.Stderr = f
 
 	funcs := skel.CNIFuncs{
