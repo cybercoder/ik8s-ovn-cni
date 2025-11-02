@@ -83,8 +83,10 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType, macAddress string) err
 	iface := &ovsModel.Interface{
 		UUID: ifaceUUID.String(),
 		Name: portName,
-		Type: ifaceType, // "system" for veth, "internal" if OVS creates it
-		MAC:  &macAddress,
+		Type: ifaceType,
+		Options: map[string]string{
+			"mac": macAddress,
+		},
 		ExternalIDs: map[string]string{
 			"iface-id": portName,
 		},
