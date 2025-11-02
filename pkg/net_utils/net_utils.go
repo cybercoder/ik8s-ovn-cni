@@ -40,6 +40,9 @@ func MoveIf2NS(ifName, netnsPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to veth: %v", err)
 	}
+	if err := netlink.LinkSetUp(If); err != nil {
+		return fmt.Errorf("failed to bring If %s up: %v", If.Attrs().Name, err)
+	}
 	if err := netlink.LinkSetNsFd(If, int(netNs)); err != nil {
 		return fmt.Errorf("failed to move peer veth to target ns: %v", err)
 	}
