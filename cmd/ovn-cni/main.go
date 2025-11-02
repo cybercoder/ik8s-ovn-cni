@@ -83,7 +83,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		IPs: []*types100.IPConfig{
 			{
 				Interface: types100.Int(0),
-				Address:   *ipNet,
+				Address:   net.IPNet{IP: net.ParseIP(ipamResponse.Address), Mask: net.IPMask(ipNet.Mask)},
 			},
 		},
 		CNIVersion: version.Current(),
