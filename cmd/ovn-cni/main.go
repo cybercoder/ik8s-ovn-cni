@@ -61,7 +61,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	generatedName := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+	generatedName := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
 
 	if err := oclient.AddPort("br-int", generatedName, "internal", ipamResponse.MacAddress); err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
@@ -101,6 +101,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	k8sArgs := cniTypes.CniKubeArgs{}
+	if err := types.LoadArgs(args.Args, &k8sArgs); err != nil {
+		log.Printf("error loading args: %v", err)
+		return err
+	}
 	ovnClient, err := ovnnb.CreateOvnNbClient("tcp:192.168.12.177:6641")
 	if err != nil {
 		log.Printf("error on creating ovn client: %v", err)
@@ -112,14 +117,29 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	err = ovnClient.DeleteLogicalPort("public", args.IfName)
+	k8sClient, err := k8s.CreateClient()
 	if err != nil {
-		log.Printf("Error on deleting logical switch port %s: %v", args.IfName, err)
+		log.Printf("Error creating Kubernetes Client: %v", err)
 		return err
 	}
-	err = ovsClient.DelPort("br-int", args.IfName)
+	pod, err := k8sClient.CoreV1().Pods(string(k8sArgs.K8S_POD_NAMESPACE)).Get(context.Background(), string(k8sArgs.K8S_POD_NAME), metav1.GetOptions{})
 	if err != nil {
-		log.Printf("Error on deleting port %s from ovs: %v", args.IfName, err)
+		log.Printf("Error getting pod: %v", err)
+		return err
+	}
+	labels := pod.GetLabels()
+	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
+	vmName := labels["vm.kubevirt.io/name"]
+	generatedName := "v-" + net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+
+	err = ovnClient.DeleteLogicalPort("public", generatedName)
+	if err != nil {
+		log.Printf("Error on deleting logical switch port %s: %v", generatedName, err)
+		return err
+	}
+	err = ovsClient.DelPort("br-int", generatedName)
+	if err != nil {
+		log.Printf("Error on deleting port %s from ovs: %v", generatedName, err)
 		return err
 	}
 
