@@ -61,17 +61,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := oclient.AddPort("br-int", args.IfName, "internal", ipamResponse.MacAddress); err != nil {
+	generatedName := net_utils.GenerateVethIfName(vmName, string(k8sArgs.K8S_POD_NAMESPACE), args.IfName)
+
+	if err := oclient.AddPort("br-int", generatedName, "internal", ipamResponse.MacAddress); err != nil {
 		log.Printf("Error adding port to ovs: %v", err)
 		return err
 	}
 
-	if err := ovnClient.CreateLogicalPort("public", args.IfName, ipamResponse.MacAddress); err != nil {
+	if err := ovnClient.CreateLogicalPort("public", generatedName, ipamResponse.MacAddress); err != nil {
 		log.Printf("Error creating logical port on logical switch public: %v", err)
 		return err
 	}
 
-	if err := net_utils.MoveIf2NS(args.IfName, args.Netns); err != nil {
+	if err := net_utils.MoveIf2NS(generatedName, args.IfName, args.Netns); err != nil {
 		log.Printf("Error moving ovs generated port to target ns %s : %v", args.Netns, err)
 		return err
 	}

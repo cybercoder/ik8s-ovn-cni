@@ -84,9 +84,7 @@ func (c *Client) AddPort(bridgeName, portName, ifaceType, macAddress string) err
 		UUID: ifaceUUID.String(),
 		Name: portName,
 		Type: ifaceType,
-		Options: map[string]string{
-			"mac": macAddress,
-		},
+		MAC:  &macAddress,
 		ExternalIDs: map[string]string{
 			"iface-id": portName,
 		},
