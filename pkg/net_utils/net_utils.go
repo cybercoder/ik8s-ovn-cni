@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -35,8 +36,14 @@ func MoveIf2NS(ifName, netnsPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get target netns: %v", err)
 	}
-
-	If, err := netlink.LinkByName(ifName)
+	var If netlink.Link
+	for range make([]struct{}, 50) { // try ~50 times
+		If, err = netlink.LinkByName(ifName)
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to veth: %v", err)
 	}
