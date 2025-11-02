@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"os"
 	"runtime"
 
@@ -74,7 +75,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 		log.Printf("Error moving ovs generated port to target ns %s : %v", args.Netns, err)
 		return err
 	}
+	_, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/24")
+	log.Printf("IpamRespond Address: %s, %s", ipamResponse.Address, ipNet.String())
 	result := &types100.Result{
+		IPs: []*types100.IPConfig{
+			{
+				Interface: types100.Int(0),
+				Address:   *ipNet,
+			},
+		},
 		CNIVersion: version.Current(),
 		Interfaces: []*types100.Interface{
 			{
