@@ -47,6 +47,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	labels := pod.GetLabels()
 	log.Printf("the vm name is %s", labels["vm.kubevirt.io/name"])
+	log.Printf("the cni is %s \n %s", args.Netns, args.NetnsOverride)
 	vmName := labels["vm.kubevirt.io/name"]
 
 	reqBody := net_utils.IpAssignmentRequestBody{
@@ -68,17 +69,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	if err := ovnClient.CreateLogicalPort("public", generatedName, ipamResponse.MacAddress); err != nil {
-		log.Printf("Error creating logical port on logical switch public: %v", err)
-		return err
-	}
-
-	if err := net_utils.MoveIf2NS(generatedName, args.IfName, args.Netns); err != nil {
+	mac, err := net_utils.MoveIf2NS(generatedName, args.IfName, args.Netns)
+	if err != nil {
 		log.Printf("Error moving ovs generated port to target ns %s : %v", args.Netns, err)
 		return err
 	}
+
+	if err := ovnClient.CreateLogicalPort("public", generatedName, *mac); err != nil {
+		log.Printf("Error creating logical port on logical switch public: %v", err)
+		return err
+	}
 	_, ipNet, err := net.ParseCIDR(ipamResponse.Address + "/24")
-	log.Printf("IpamRespond Address: %s, %s", ipamResponse.Address, ipNet.String())
+	log.Printf("IpamRespond Address: %s, cidr %s", ipamResponse.Address, ipNet.String())
 	result := &types100.Result{
 		IPs: []*types100.IPConfig{
 			{
@@ -91,7 +93,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			{
 				Mtu:     1500,
 				Name:    args.IfName,
-				Mac:     ipamResponse.MacAddress,
+				Mac:     *mac,
 				Sandbox: args.Netns,
 			},
 		},

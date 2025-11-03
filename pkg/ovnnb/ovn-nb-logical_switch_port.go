@@ -29,7 +29,7 @@ func (c *Client) CreateLogicalPort(lsName, lspName, hostMAC string) error {
 	lsp := &models.LogicalSwitchPort{
 		UUID:      lspUUID,
 		Name:      lspName,
-		Addresses: []string{hostMAC},
+		Addresses: []string{hostMAC + " dynamic"},
 		// ExternalIDs: map[string]string{
 		// 	"iface-id": "pod1",
 		// 	"pod":      "true",
